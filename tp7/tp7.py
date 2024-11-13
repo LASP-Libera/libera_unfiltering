@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import os
+import scipy.integrate as integrate
 
 class Tape7:
     def __init__(self, filepath: str):
@@ -398,6 +399,8 @@ class Tape7:
             self.rads[:, 1, i] = swrad
             self.rads[:, 2, i] = lwrad
 
+        self.rads = np.transpose(self.rads, (2, 1, 0))
+
         return self.rads
 
 
@@ -425,3 +428,14 @@ class Tape7:
         emit = tot - refl
 
         return freq, refl, emit
+
+    def integrate_unfiltered_radiances(self):
+        """
+        Integrate all calculated radiences, without the SRFS
+        :return: integrated radiences : array
+        """
+        # rads = (run_num, wv, measurement)
+        shortwave = [-integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
+        longwave = [-integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
+
+        return np.array([np.array(shortwave), np.array(longwave)])

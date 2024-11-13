@@ -52,7 +52,7 @@ from datetime import datetime
 
 def readtp7(filename, verbose):
     starttime = datetime.now() #for computing runtime
-    lines = open(r"/home/caleb/Masters/ceres_data_analysis/data/Modtran_Unfiltering_Tape7s_SZA41" + "/" + filename).readlines()
+    lines = open(r"/Users/calebkumar/Desktop/Desktop_Caleb_MacBook_Air/Masters/Modeling-Radiance/data/Modtran_Unfiltering_Tape7s_SZA00" + "/" + filename).readlines()
     
     #print data headers for referencing parameter columns
     if verbose:

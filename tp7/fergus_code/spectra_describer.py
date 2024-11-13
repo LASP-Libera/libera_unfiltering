@@ -6,7 +6,7 @@ from readheaders import readheaders
 
 
 #TP7 data
-filename = "dc_sz41.spectra.tp7"
+filename = "lnd_sz00L.tp7"
 tp7data = readtp7(filename, False)
 headerdata = readheaders(filename)
 
@@ -44,7 +44,7 @@ windspd = np.zeros(numruns)
 
 #Customize header descriptions based on filename
 title = ""
-if filename == "lnd_sz41L.tp7":
+if filename == "lnd_sz00L.tp7":
     title = "Land"
     for i in range(numruns):
         scene.append(title)
