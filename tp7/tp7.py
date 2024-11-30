@@ -431,11 +431,14 @@ class Tape7:
 
     def integrate_unfiltered_radiances(self):
         """
-        Integrate all calculated radiences, without the SRFS
+        Integrate all calculated radiences, without the SRFS - Unfiltered Ground Truth y value
         :return: integrated radiences : array
         """
         # rads = (run_num, wv, measurement)
         shortwave = [-integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
         longwave = [-integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
+
+        self.describer_df["Shortwave Unfiltered Rads"] = shortwave
+        self.describer_df["Longwave Unfiltered Rads"] = longwave
 
         return np.array([np.array(shortwave), np.array(longwave)])
