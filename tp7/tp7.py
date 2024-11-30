@@ -357,23 +357,21 @@ class Tape7:
         :return:
         """
 
+        mapping = {"No Cloud": 0, "Anycloud": 1}
+
         data = None
-        if title == "Land":
-            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Atm model': atmmodel, 'Sfc Temp': surfacetemp,
-                    'Albedo model': albedomodel, 'Season': season, 'Aerosol Type': aerosoltype, 'Met Range': met,
-                    'Wind spd (ms-1)': windspd, 'Cld Type': cldtype, 'Cld Alt (km)': cldalt, "Cld Thick (km)": cldthick,
-                    'Cld Ext Coef (km-1)': cldext, 'Run #': runnumber}
-        elif title == "Cloudy Ocean":
-            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Cld Type': cldtype, 'Cld Alt (km)': cldalt,
-                    "Cld Thick (km)": cldthick, 'Cld Ext Coef (km-1)': cldext, 'Run #': runnumber}
+        if title in ["Land", "Cloudy Ocean", "Snow"]:
+            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Cld Type': cldtype, 'Run #': runnumber}
+            df = pd.DataFrame(data)
+            df["Cld Type"] = df["Cld Type"].apply(lambda x: "No Cloud" if x.lower() == "no cloud" else "Anycloud")
+            df["Cld Type"] = df["Cld Type"].map(mapping)
+            return df
+
         elif title == "Clear Ocean":
-            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Met Range': met, 'Run #': runnumber}
-        elif title == "Snow":
-            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Sfc Temp': surfacetemp,
-                    'Albedo model': albedomodel, 'Cld Type': cldtype, 'Cld Alt (km)': cldalt,
-                    "Cld Thick (km)": cldthick, 'Cld Ext Coef (km-1)': cldext, 'Run #': runnumber}
+            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, "Cloud": [0] * len(sza), 'Run #': runnumber}
+
         elif title == "Deep Convective Cloud":
-            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Cloud Alt (km)': cldalt, 'Run #': runnumber}
+            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Cloud': [1] * len(sza), 'Run #': runnumber}
 
         return pd.DataFrame(data)
 
