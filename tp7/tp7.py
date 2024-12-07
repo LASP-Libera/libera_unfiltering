@@ -8,11 +8,11 @@ class Tape7:
     def __init__(self, filepath: str):
         self.filepath = filepath
         self.num_runs = 0
-        self.header_data = self.read_tp7_headers(self.filepath)
+        self.header_data = self._read_tp7_headers(self.filepath)
         self.file_data = self.read_tp7(self.filepath)
         self.rads = []
         self.describer_df = None
-        self.title = self.get_title(self.filepath)
+        self.title = self._get_title(self.filepath)
 
     def read_tp7(self, filepath: str) -> np.ndarray:
         """
@@ -48,7 +48,7 @@ class Tape7:
         self.file_data = grid
         return grid
 
-    def read_tp7_headers(self, filepath: str) -> list:
+    def _read_tp7_headers(self, filepath: str) -> list:
         """
         Reads the header data of the file given and stores as an array
         :param filepath : str the filepath to the tp7 data file
@@ -83,7 +83,7 @@ class Tape7:
         self.header_data = lst
         return lst
 
-    def get_title(self, filepath: str) -> str:
+    def _get_title(self, filepath: str) -> str:
         """
         Given the filepath to the data file, returns the Scene type/title of the data
         :param filepath : str the filepath to the tp7 data file
@@ -123,23 +123,23 @@ class Tape7:
             num_runs)
         atmmodel, season, aerosoltype = [], [], []
 
-        title = self.get_title(self.filepath)
+        title = self._get_title(self.filepath)
 
         for i in range(num_runs):
-            self.populate_scene_data(i, title, scene, runnumber, sza, vza, raz, header_data, cldtype,
+            self._populate_scene_data(i, title, scene, runnumber, sza, vza, raz, header_data, cldtype,
                                      cldalt, cldthick, cldext, surfacetemp, albedomodel, met, windspd,
                                      atmmodel, season, aerosoltype)
 
         if title == "Land" or title == "Deep Convective Cloud":
             vza = 180 - vza
-        df = self.create_description_dataframe(title, scene, sza, vza, raz, cldtype, cldalt, cldthick, cldext,
+        df = self._create_description_dataframe(title, scene, sza, vza, raz, cldtype, cldalt, cldthick, cldext,
                                                surfacetemp, albedomodel, met, windspd, atmmodel, season, aerosoltype,
                                                runnumber)
 
         self.describer_df = df
         return self.describer_df
 
-    def populate_scene_data(self, i, title, scene, runnumber, sza, vza, raz, headerdata, cldtype,
+    def _populate_scene_data(self, i, title, scene, runnumber, sza, vza, raz, headerdata, cldtype,
                             cldalt, cldthick, cldext, surfacetemp, albedomodel, met, windspd,
                             atmmodel, season, aerosoltype):
         """
@@ -333,7 +333,7 @@ class Tape7:
                 card3[2] = thing1
             vza[i] = card3[2]
 
-    def create_description_dataframe(self, title, scene, sza, vza, raz, cldtype, cldalt, cldthick, cldext, surfacetemp,
+    def _create_description_dataframe(self, title, scene, sza, vza, raz, cldtype, cldalt, cldthick, cldext, surfacetemp,
                                      albedomodel, met, windspd, atmmodel, season, aerosoltype, runnumber):
         """
         Creates the dataframe per scene type with the correct data
@@ -375,20 +375,20 @@ class Tape7:
 
         return pd.DataFrame(data)
 
-    def compute_radiences(self):
+    def _compute_radiences(self):
         """
         Computes the radiences of the datafile from the tp7 data
         :return: nparray of the radiences
         """
         num_runs = self.num_runs
         tp7data = self.file_data
-        colnums = self.get_column_numbers(tp7data)
+        colnums = self._get_column_numbers(tp7data)
 
         # Create the radiance array
         self.rads = np.zeros((4000, 3, num_runs))
 
         for i in range(num_runs):
-            freq, refl, emit = self.calculate_radiances_for_run(i, tp7data, colnums)
+            freq, refl, emit = self._calculate_radiances_for_run(i, tp7data, colnums)
             lam = (1 / freq) * 1E4
             swrad = (freq ** 2) * refl
             lwrad = (freq ** 2) * emit
@@ -402,7 +402,7 @@ class Tape7:
         return self.rads
 
 
-    def get_column_numbers(self, tp7data):
+    def _get_column_numbers(self, tp7data):
         """
         Determine column numbers based on the shape of tp7data.
         """
@@ -413,7 +413,7 @@ class Tape7:
         else:
             raise ValueError("Error with tp7data: Unexpected number of columns")
 
-    def calculate_radiances_for_run(self, run_index, tp7data, colnums):
+    def _calculate_radiances_for_run(self, run_index, tp7data, colnums):
         """
         Calculate frequencies and radiances for a single run.
         """
@@ -427,16 +427,27 @@ class Tape7:
 
         return freq, refl, emit
 
-    def integrate_unfiltered_radiances(self):
+    def integrate_radiances(self, sw_srf, lw_srf):
         """
         Integrate all calculated radiences, without the SRFS - Unfiltered Ground Truth y value
         :return: integrated radiences : array
         """
+
+        self._compute_radiences()
+
         # rads = (run_num, wv, measurement)
-        shortwave = [-integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
-        longwave = [-integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
+        shortwave_unfiltered = [-integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
+        longwave_unfiltered = [-integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
 
-        self.describer_df["Shortwave Unfiltered Rads"] = shortwave
-        self.describer_df["Longwave Unfiltered Rads"] = longwave
+        # shortwave_filtered = [-integrate.simpson(y=(run[1] * sw_srf), x=run[0]) for run in self.rads]
+        # longwave_filtered = [-integrate.simpson(y=(run[1] * lw_srf), x=run[0]) for run in self.rads]
 
-        return np.array([np.array(shortwave), np.array(longwave)])
+        self.describer_df["Shortwave Unfiltered Rads"] = shortwave_unfiltered
+        self.describer_df["Longwave Unfiltered Rads"] = longwave_unfiltered
+
+        # self.describer_df["Shortwave Filtered Rads"] = shortwave_filtered
+        # self.describer_df["Longwave Filtered Rads"] = longwave_filtered
+
+
+        # return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered), np.array(shortwave_filtered), np.array(longwave_filtered)])
+        return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered)])
