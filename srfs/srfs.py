@@ -5,11 +5,12 @@ from typing import Union
 class SRFS:
     def __init__(self, file_path):
         self.file_path = file_path
-        self.srf = self.process_srf(self.file_path)
+        self.srf_vals = None
         self.conversion_df = {}
+        self.process_srf()
 
-    def process_srf(self, srf_file: str):
-        srf = pd.read_csv(srf_file)
+    def process_srf(self):
+        srf = pd.read_csv(self.file_path)
 
         # loop through and create a column in the dataframe that holds the end of the wavelength range
         for index, row in srf.iterrows():
@@ -30,19 +31,6 @@ class SRFS:
         # add the final end value to replace the NAN
         srf.loc[999, 'End_wv_range'] = 1001
 
-        return srf
+        self.srf_vals = srf
 
-    def create_conversion_df(self, wavelength_arr: Union[np.array, pd.DataFrame, pd.Series] = None, srf: pd.DataFrame = None, wv: str = None):
-        if wavelength_arr is None:
-            wavelength_arr = self.srf
-        bins = pd.IntervalIndex.from_arrays(srf['wavelength [um]'], srf['End_wv_range'], closed='left')
-        binned_data = pd.cut(wavelength_arr, bins)
-        interval_and_srf = dict(zip(bins, srf[wv]))
-        df = pd.DataFrame({
-            "Wavelength": wavelength_arr,
-            "Range": binned_data,
-        })
-        print(type(interval_and_srf))
-        df[wv] = df["Range"].map(interval_and_srf)
-        self.conversion_df = df
-        return df
+        return

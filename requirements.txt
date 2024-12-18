@@ -1,0 +1,10 @@
+# This file may be used to create an environment using:
+# $ conda create --name <env> --file <this file>
+# platform: osx-arm64
+matplotlib=3.9.2
+matplotlib-base=3.9.2
+matplotlib-inline=0.1.7
+numpy=2.1.1
+pandas=2.2.2
+pandocfilters=1.5.0
+scipy=1.14.1

@@ -387,15 +387,26 @@ class Tape7:
         # Create the radiance array
         self.rads = np.zeros((4000, 3, num_runs))
 
+        print(tp7data.shape)
+        print(tp7data[:, 0, 0])
+        print(colnums)
+
         for i in range(num_runs):
             freq, refl, emit = self._calculate_radiances_for_run(i, tp7data, colnums)
-            lam = (1 / freq) * 1E4
-            swrad = (freq ** 2) * refl
-            lwrad = (freq ** 2) * emit
+            if self.title in ["Land", "Deep Convective Cloud"]:
+                # convert to wavelength
+                lam = (1 / freq) * 1E4
+                swrad = (freq ** 2) * refl
+                lwrad = (freq ** 2) * emit
 
-            self.rads[:, 0, i] = lam
-            self.rads[:, 1, i] = swrad
-            self.rads[:, 2, i] = lwrad
+                self.rads[:, 0, i] = lam
+                self.rads[:, 1, i] = swrad
+                self.rads[:, 2, i] = lwrad
+
+            else:
+                self.rads[:, 0, i] = tp7data[:, 0, i]
+                self.rads[:, 1, i] = refl
+                self.rads[:, 2, i] = emit
 
         self.rads = np.transpose(self.rads, (2, 1, 0))
 
