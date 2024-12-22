@@ -361,10 +361,10 @@ class Tape7:
 
         data = None
         if title in ["Land", "Cloudy Ocean", "Snow"]:
-            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Cld Type': cldtype, 'Run #': runnumber}
+            data = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Cloud': cldtype, 'Run #': runnumber}
             df = pd.DataFrame(data)
-            df["Cld Type"] = df["Cld Type"].apply(lambda x: "No Cloud" if x.lower() == "no cloud" else "Anycloud")
-            df["Cld Type"] = df["Cld Type"].map(mapping)
+            df["Cloud"] = df["Cloud"].apply(lambda x: "No Cloud" if x.lower() == "no cloud" else "Anycloud")
+            df["Cloud"] = df["Cloud"].map(mapping)
             return df
 
         elif title == "Clear Ocean":
@@ -387,14 +387,10 @@ class Tape7:
         # Create the radiance array
         self.rads = np.zeros((4000, 3, num_runs))
 
-        print(tp7data.shape)
-        print(tp7data[:, 0, 0])
-        print(colnums)
-
         for i in range(num_runs):
             freq, refl, emit = self._calculate_radiances_for_run(i, tp7data, colnums)
             if self.title in ["Land", "Deep Convective Cloud"]:
-                # convert to wavelength
+                # convert to wavelength and to microns
                 lam = (1 / freq) * 1E4
                 swrad = (freq ** 2) * refl
                 lwrad = (freq ** 2) * emit
@@ -438,7 +434,7 @@ class Tape7:
 
         return freq, refl, emit
 
-    def integrate_radiances(self, sw_srf, lw_srf):
+    def integrate_radiances(self, srf_wvlns, sw_srf, lw_srf):
         """
         Integrate all calculated radiences, without the SRFS - Unfiltered Ground Truth y value
         :return: integrated radiences : array
@@ -446,19 +442,22 @@ class Tape7:
 
         self._compute_radiences()
 
+        interpolated_sw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=sw_srf)
+        interpolated_lw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=lw_srf)
+
         # rads = (run_num, wv, measurement)
         shortwave_unfiltered = [-integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
         longwave_unfiltered = [-integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
 
-        # shortwave_filtered = [-integrate.simpson(y=(run[1] * sw_srf), x=run[0]) for run in self.rads]
-        # longwave_filtered = [-integrate.simpson(y=(run[1] * lw_srf), x=run[0]) for run in self.rads]
+        shortwave_filtered = [-integrate.simpson(y=(run[1] * interpolated_sw_srf), x=run[0]) for run in self.rads]
+        longwave_filtered = [-integrate.simpson(y=(run[1] * interpolated_lw_srf), x=run[0]) for run in self.rads]
 
-        self.describer_df["Shortwave Unfiltered Rads"] = shortwave_unfiltered
-        self.describer_df["Longwave Unfiltered Rads"] = longwave_unfiltered
+        self.describer_df["Shortwave Unfiltered Rads (Integrated)"] = shortwave_unfiltered
+        self.describer_df["Longwave Unfiltered Rads (Integrated)"] = longwave_unfiltered
 
-        # self.describer_df["Shortwave Filtered Rads"] = shortwave_filtered
-        # self.describer_df["Longwave Filtered Rads"] = longwave_filtered
+        self.describer_df["Shortwave Filtered Rads (Integrated)"] = shortwave_filtered
+        self.describer_df["Longwave Filtered Rads (Integrated)"] = longwave_filtered
 
 
-        # return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered), np.array(shortwave_filtered), np.array(longwave_filtered)])
-        return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered)])
+        return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered), np.array(shortwave_filtered), np.array(longwave_filtered)])
+        # return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered)])
