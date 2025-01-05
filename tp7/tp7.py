@@ -8,23 +8,29 @@ class Tape7:
     def __init__(self, filepath: str):
         self.filepath = filepath
         self.num_runs = 0
-        self.header_data = self._read_tp7_headers(self.filepath)
-        self.file_data = self.read_tp7(self.filepath)
+        self.header_data = None
+        self.file_data = None
         self.rads = []
         self.describer_df = None
+        self.title = None
+        self._init_data()
+
+    def _init_data(self):
+        """
+        Initialize the tp7 file and set variables
+        """
+        self.header_data, self.file_data = self._read_tp7(self.filepath)[0], self._read_tp7(self.filepath)[1]
         self.title = self._get_title(self.filepath)
+        self.describer_df = self._build_scene_description()
 
-    def read_tp7(self, filepath: str) -> np.ndarray:
+    @staticmethod
+    def _parse_metadata(lines):
         """
-        Reads the file given and turns the data into a numpy array
-        :param filepath : str the filepath to the tp7 data file
-        :return: file_data : numpy array of the tp7 file data
+        Parses metadata from the headers of the tp7 file
+        :param lines: list of file lines
+        :return: tuple containing header data and metadata
         """
 
-        with open(filepath, 'r') as file:
-            lines = file.readlines()
-
-        # Determine if the file represents a daytime or nighttime file based on the first line
         day_or_night = lines[0]
         size = 4000 if day_or_night[0] == 'F' else 4996
 
@@ -36,54 +42,10 @@ class Tape7:
         # Define starting index based on the number of columns detected
         start_index = 13 if num_cols == 12 else 12
 
-        # Initialize an empty grid array with calculated dimensions
-        grid = np.zeros((size, num_cols, num_runs))
+        return size, num_cols, num_runs, start_index
 
-        # Iterate through each run and populate the grid
-        for i in range(num_runs):
-            idxs = start_index + (i * ((size + 1) + start_index))
-            run_lines = lines[idxs:idxs + size]
-            grid[:, :, i] = np.genfromtxt(run_lines, dtype=float, usecols=None)
-
-        self.file_data = grid
-        return grid
-
-    def _read_tp7_headers(self, filepath: str) -> list:
-        """
-        Reads the header data of the file given and stores as an array
-        :param filepath : str the filepath to the tp7 data file
-        :return: header_data : list of the parsed header data
-        """
-
-        with open(filepath, "r") as file:
-            lines = file.readlines()
-
-        # Determine if the file represents a daytime or nighttime file based on the first line
-        day_or_night = lines[0]
-        size = 4000 if day_or_night[0] == 'F' else 4996
-
-        # Determine number of columns based on the last line before data ends
-        sample_row = lines[-2].split()
-        num_cols = len(sample_row)
-        num_runs = len([line for line in lines if line.strip() == lines[-1].strip()])
-
-        # Define starting index based on the number of columns detected
-        start_index = 13 if num_cols == 12 else 12
-
-        # build empty list for headers
-        lst = [['#' for col in range(start_index)] for row in range(num_runs)]
-        # populate list
-        for i in np.arange(0, num_runs, 1):
-            idxs = (i * ((size + 1) + start_index))
-            idxl = idxs + start_index
-            thing = lines[idxs:idxl]
-            for j in range(start_index):
-                lst[i][j] = thing[j]
-
-        self.header_data = lst
-        return lst
-
-    def _get_title(self, filepath: str) -> str:
+    @staticmethod
+    def _get_title(filepath: str):
         """
         Given the filepath to the data file, returns the Scene type/title of the data
         :param filepath : str the filepath to the tp7 data file
@@ -104,10 +66,43 @@ class Tape7:
         if title == -1:
             raise ValueError("File not found")
 
-        self.title = title
         return title
 
-    def build_scene_description(self):
+    def _read_tp7(self, filepath: str):
+        """
+        Reads the file given and turns the data into a numpy array
+        :param filepath : str the filepath to the tp7 data file
+        :return: file_data : numpy array of the tp7 file data
+        """
+
+        with open(filepath, 'r') as file:
+            lines = file.readlines()
+
+        size, num_cols, num_runs, start_index = self._parse_metadata(lines)
+
+        # Initialize an empty grid array with calculated dimensions
+        grid = np.zeros((size, num_cols, num_runs))
+
+        # Iterate through each run and populate the grid
+        for i in range(num_runs):
+            idxs = start_index + (i * ((size + 1) + start_index))
+            run_lines = lines[idxs:idxs + size]
+            grid[:, :, i] = np.genfromtxt(run_lines, dtype=float, usecols=None)
+
+        # empty list for headers
+        lst = [['#' for col in range(start_index)] for row in range(num_runs)]
+
+        for i in np.arange(0, num_runs, 1):
+            idxs = (i * ((size + 1) + start_index))
+            idxl = idxs + start_index
+            thing = lines[idxs:idxl]
+            for j in range(start_index):
+                lst[i][j] = thing[j]
+
+        return [lst, grid]
+
+
+    def _build_scene_description(self):
         """
         Given the data file and all the data create a dataframe that describes the data by run
         Describes by scene type
