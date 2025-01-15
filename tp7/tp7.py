@@ -390,14 +390,14 @@ class Tape7:
                 swrad = (freq ** 2) * refl
                 lwrad = (freq ** 2) * emit
 
-                self.rads[:, 0, i] = lam
-                self.rads[:, 1, i] = swrad
-                self.rads[:, 2, i] = lwrad
+                self.rads[:, 0, i] = lam[::-1]
+                self.rads[:, 1, i] = swrad[::-1]
+                self.rads[:, 2, i] = lwrad[::-1]
 
             else:
-                self.rads[:, 0, i] = tp7data[:, 0, i]
-                self.rads[:, 1, i] = refl
-                self.rads[:, 2, i] = emit
+                self.rads[:, 0, i] = tp7data[:, 0, i][::-1]
+                self.rads[:, 1, i] = refl[::-1]
+                self.rads[:, 2, i] = emit[::-1]
 
         self.rads = np.transpose(self.rads, (2, 1, 0))
 
@@ -441,11 +441,11 @@ class Tape7:
         interpolated_lw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=lw_srf)
 
         # rads = (run_num, wv, measurement)
-        shortwave_unfiltered = [-integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
-        longwave_unfiltered = [-integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
+        shortwave_unfiltered = [integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
+        longwave_unfiltered = [integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
 
-        shortwave_filtered = [-integrate.simpson(y=(run[1] * interpolated_sw_srf), x=run[0]) for run in self.rads]
-        longwave_filtered = [-integrate.simpson(y=(run[1] * interpolated_lw_srf), x=run[0]) for run in self.rads]
+        shortwave_filtered = [integrate.simpson(y=(run[1] * interpolated_sw_srf), x=run[0]) for run in self.rads]
+        longwave_filtered = [integrate.simpson(y=(run[1] * interpolated_lw_srf), x=run[0]) for run in self.rads]
 
         self.describer_df["Shortwave Unfiltered Rads (Integrated)"] = shortwave_unfiltered
         self.describer_df["Longwave Unfiltered Rads (Integrated)"] = longwave_unfiltered
@@ -455,4 +455,3 @@ class Tape7:
 
 
         return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered), np.array(shortwave_filtered), np.array(longwave_filtered)])
-        # return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered)])
