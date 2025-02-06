@@ -5,7 +5,7 @@ import os
 import scipy.integrate as integrate
 
 class Tape7:
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str, srf_wvlns, sw_srf, lw_srf):
         self.filepath = filepath
         self.num_runs = 0
         self.header_data = None
@@ -13,15 +13,18 @@ class Tape7:
         self.rads = []
         self.describer_df = None
         self.title = None
-        self._init_data()
+        self.integrated_rads = None
+        self._init_data(srf_wvlns, sw_srf, lw_srf)
 
-    def _init_data(self):
+    def _init_data(self, srf_wvlns, sw_srf, lw_srf):
         """
         Initialize the tp7 file and set variables
         """
         self.header_data, self.file_data = self._read_tp7(self.filepath)[0], self._read_tp7(self.filepath)[1]
         self.title = self._get_title(self.filepath)
         self.describer_df = self._build_scene_description()
+        self.rads = self._compute_radiences()
+        self.integrated_rads = self._integrate_radiances(srf_wvlns, sw_srf, lw_srf)
 
     @staticmethod
     def _parse_metadata(lines):
@@ -429,13 +432,11 @@ class Tape7:
 
         return freq, refl, emit
 
-    def integrate_radiances(self, srf_wvlns, sw_srf, lw_srf):
+    def _integrate_radiances(self, srf_wvlns, sw_srf, lw_srf):
         """
         Integrate all calculated radiences, without the SRFS - Unfiltered Ground Truth y value
         :return: integrated radiences : array
         """
-
-        self._compute_radiences()
 
         interpolated_sw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=sw_srf)
         interpolated_lw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=lw_srf)
