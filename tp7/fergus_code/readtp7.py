@@ -52,7 +52,7 @@ from datetime import datetime
 
 def readtp7(filename, verbose):
     starttime = datetime.now() #for computing runtime
-    lines = open(r"/Users/calebkumar/Desktop/Desktop_Caleb_MacBook_Air/Masters/Modeling-Radiance/data/Modtran_Unfiltering_Tape7s_SZA00" + "/" + filename).readlines()
+    lines = open(r"/Users/calebkumar/Desktop/Desktop_Calebs_Pro/masters/Modeling-Radiance/data/Modtran_Unfiltering_Tape7s_SZA85/" + "/" + filename).readlines()
     
     #print data headers for referencing parameter columns
     if verbose:
@@ -104,6 +104,7 @@ def readtp7(filename, verbose):
     endtime = datetime.now()
     if verbose:
         print("Time taken to read data: ", (endtime - starttime))
+    print(np.shape(grid))
     return grid
 #    
 #cldyoceandata = readtp7("\ocecld_sz41L.tp7")

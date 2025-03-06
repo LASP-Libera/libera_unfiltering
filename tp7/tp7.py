@@ -389,9 +389,9 @@ class Tape7:
             freq, refl, emit = self._calculate_radiances_for_run(i, tp7data, colnums)
             if self.title in ["Land", "Deep Convective Cloud"]:
                 # convert to wavelength and to microns
-                lam = (1 / freq) * 1E4
-                swrad = (freq ** 2) * refl
-                lwrad = (freq ** 2) * emit
+                lam = (1.0000000000000000000000000 / freq) * 1E4
+                swrad = (freq ** 2.00) * refl
+                lwrad = (freq ** 2.00) * emit
 
                 self.rads[:, 0, i] = lam[::-1]
                 self.rads[:, 1, i] = swrad[::-1]
@@ -427,6 +427,7 @@ class Tape7:
         sfctot = tp7data[:, int(colnums[1]), run_index]
         thmsfcref = tp7data[:, int(colnums[2]), run_index]
         pathscat = tp7data[:, int(colnums[3]), run_index]
+        # print(pathscat[0], sfctot[0], thmsfcref[0], tot[0])
         refl = pathscat + sfctot - thmsfcref
         emit = tot - refl
 
@@ -446,7 +447,7 @@ class Tape7:
         longwave_unfiltered = [integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
 
         shortwave_filtered = [integrate.simpson(y=(run[1] * interpolated_sw_srf), x=run[0]) for run in self.rads]
-        longwave_filtered = [integrate.simpson(y=(run[1] * interpolated_lw_srf), x=run[0]) for run in self.rads]
+        longwave_filtered = [integrate.simpson(y=(run[2] * interpolated_lw_srf), x=run[0]) for run in self.rads]
 
         self.describer_df["Shortwave Unfiltered Rads (Integrated)"] = shortwave_unfiltered
         self.describer_df["Longwave Unfiltered Rads (Integrated)"] = longwave_unfiltered
@@ -455,4 +456,5 @@ class Tape7:
         self.describer_df["Longwave Filtered Rads (Integrated)"] = longwave_filtered
 
 
-        return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered), np.array(shortwave_filtered), np.array(longwave_filtered)])
+        return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered),
+                         np.array(shortwave_filtered), np.array(longwave_filtered)])

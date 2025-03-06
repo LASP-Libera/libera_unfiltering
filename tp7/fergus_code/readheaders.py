@@ -3,7 +3,7 @@ import numpy as np
 #this function will isolate the headers only and store each header
 #into a 2D grid - access header data with: [run][line][character]
 def readheaders(filename):
-    lines = open(r"/Users/calebkumar/Desktop/Desktop_Caleb_MacBook_Air/Masters/Modeling-Radiance/data/Modtran_Unfiltering_Tape7s_SZA00" + "/" + filename).readlines()
+    lines = open(r"/Users/calebkumar/Desktop/Desktop_Calebs_Pro/masters/Modeling-Radiance/data/Modtran_Unfiltering_Tape7s_SZA85/" + "/" + filename).readlines()
     
     
     #determine if file is night (wavenumer 10-10,000) 

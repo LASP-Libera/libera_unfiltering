@@ -6,14 +6,15 @@ from readheaders import readheaders
 
 
 #TP7 data
-filename = "lnd_sz00L.tp7"
+filename = "sno_sz85L.tp7"
 tp7data = readtp7(filename, False)
 headerdata = readheaders(filename)
 
+# print("FUCK \n", tp7data)
+
 #Figure out how many runs there are
 numruns = np.shape(tp7data)[2]
-print(numruns)
-
+# print(numruns)
 
 ddf = None
 #=====Step 1: build a scene type description dataframe=====#
@@ -129,7 +130,7 @@ if filename == "lnd_sz00L.tp7":
     d = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Atm model': atmmodel, 'Sfc Temp': surfacetemp, 'Albedo model': albedomodel, 'Season': season, 'Aerosol Type': aerosoltype, 'Met Range': met, 'Wind spd (ms-1)': windspd, 'Cld Type': cldtype, 'Cld Alt (km)': cldalt, "Cld Thick (km)": cldthick, 'Cld Ext Coef (km-1)': cldext, 'Run #': runnumber}
     ddf = pd.DataFrame(data=d)
     
-elif filename == "\ocecld_sz41L.tp7":
+elif filename == "ocecld_sz60L.tp7":
     title = "Cloudy Ocean"
     for i in range(numruns):
         scene.append(title)
@@ -184,7 +185,7 @@ elif filename == "\oceclr_sz41L.tp7":
     d = {'Scene': scene, 'SZA': sza, 'VZA': vza, 'RAZ': raz, 'Met Range': met, 'Run #': runnumber}
     ddf = pd.DataFrame(data=d)
         
-elif filename == "\sno_sz41L.tp7":
+elif filename == "sno_sz85L.tp7":
     title = "Snow"
     for i in range(len(headerdata)):
         scene.append(title)
@@ -333,21 +334,24 @@ for i in range(numruns):
 
 #=====PLOT FOR SANITY CHECK=====#
 #access wavelength with rads[:,0,runnum], swrad with rads[:,1,runnum], lwrad with rads[:,2,runnum]
-runnum = 1
+runnum = 0
 # print('')
 # print(describer_df)
 # print(np.shape(rads))
 
-figure = plt.figure(2, figsize=(19,10))
-ax = plt.axes()
-ax.plot(rads[:,0,runnum], rads[:,1, runnum], 'r-', label='SW Radiance')
-#ax.plot(rads[:,0,runnum], rads[:,2, runnum], 'b-', label='LW Radiance')
-ax.legend(prop={"size":20})
-plt.title("%s Radiance Spectrum"%title, fontsize=40)
-plt.xticks(fontsize=20)
-plt.yticks(fontsize=20)
-plt.xlabel('Wavelength um', fontsize=30)
-plt.ylabel('Radiance $W m^{-2} um^{-1} sr^{-1}$', fontsize=30)
-plt.xlim(0,5)
-#plt.ylim(0, 5E-4)
+# figure = plt.figure(2, figsize=(19,10))
+# ax = plt.axes()
+# ax.plot(rads[:,0,runnum], rads[:,1, runnum], 'r-', label='SW Radiance')
+# #ax.plot(rads[:,0,runnum], rads[:,2, runnum], 'b-', label='LW Radiance')
+# ax.legend(prop={"size":20})
+# plt.title("%s Radiance Spectrum"%title, fontsize=40)
+# plt.xticks(fontsize=20)
+# plt.yticks(fontsize=20)
+# plt.xlabel('Wavelength um', fontsize=30)
+# plt.ylabel('Radiance $W m^{-2} um^{-1} sr^{-1}$', fontsize=30)
+# plt.xlim(0,5)
+# plt.ylim(0, 5E-4)
+
+print(ddf)
+print(np.shape(rads))
 
