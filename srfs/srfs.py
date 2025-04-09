@@ -19,6 +19,7 @@ class SRFS:
                 continue
             else:
                 srf.loc[index, 'End_wv_range'] = srf.loc[next_index, 'wavelength [um]']
+                # wavelength_um wavelength [um]
 
         # create the first row in the dataframe starting at wavelenght 0.0 and ending at the first wavelength from the csv
         new_row = srf.iloc[0].copy()

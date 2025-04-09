@@ -7,6 +7,7 @@ import scipy.integrate as integrate
 class Tape7:
     def __init__(self, filepath: str, srf_wvlns, sw_srf, lw_srf):
         self.filepath = filepath
+        self.tests = []
         self.num_runs = 0
         self.header_data = None
         self.file_data = None
@@ -387,20 +388,23 @@ class Tape7:
 
         for i in range(num_runs):
             freq, refl, emit = self._calculate_radiances_for_run(i, tp7data, colnums)
-            if self.title in ["Land", "Deep Convective Cloud"]:
-                # convert to wavelength and to microns
-                lam = (1.0000000000000000000000000 / freq) * 1E4
-                swrad = (freq ** 2.00) * refl
-                lwrad = (freq ** 2.00) * emit
+            # print(f"freq values: {freq[0]:.20f}, wv value: {tp7data[:, 0, i][0]:.20f}, scene: {self.title}")
+            self.tests.append(freq[0])
+            # if self.title in ["Land", "Deep Convective Cloud"]:
+            # convert to wavelength and to microns
+            lam = (1.0000000000000000000000000 / freq) * 1E4
+            swrad = (freq ** 2.00) * refl
+            lwrad = (freq ** 2.00) * emit
 
-                self.rads[:, 0, i] = lam[::-1]
-                self.rads[:, 1, i] = swrad[::-1]
-                self.rads[:, 2, i] = lwrad[::-1]
+            self.rads[:, 0, i] = lam[::-1]
+            self.rads[:, 1, i] = swrad[::-1]
+            self.rads[:, 2, i] = lwrad[::-1]
 
-            else:
-                self.rads[:, 0, i] = tp7data[:, 0, i][::-1]
-                self.rads[:, 1, i] = refl[::-1]
-                self.rads[:, 2, i] = emit[::-1]
+            # else:
+            #     self.rads[:, 0, i] = tp7data[:, 0, i][::-1]
+            #     # self.rads[:, 0, i] = freq
+            #     self.rads[:, 1, i] = refl[::-1]
+            #     self.rads[:, 2, i] = emit[::-1]
 
         self.rads = np.transpose(self.rads, (2, 1, 0))
 
