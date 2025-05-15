@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 import scipy.integrate as integrate
+import time
 
 class Tape7:
     def __init__(self, filepath: str, srf_wvlns, sw_srf, lw_srf):
@@ -21,11 +22,33 @@ class Tape7:
         """
         Initialize the tp7 file and set variables
         """
-        self.header_data, self.file_data = self._read_tp7(self.filepath)[0], self._read_tp7(self.filepath)[1]
+        s1 = time.time()
+        read_result = self._read_tp7(self.filepath)
+        s2 = time.time()
+        # print("Read result sec", s2 - s1)
+
+        self.header_data, self.file_data = read_result[0], read_result[1]
+
+        s3 = time.time()
         self.title = self._get_title(self.filepath)
+        s4 = time.time()
+        # print("Title time", s4 - s3)
+
+        s5 = time.time()
         self.describer_df = self._build_scene_description()
+        s6 = time.time()
+        # print("Describer df sec", s6 - s5)
+
+        s7 = time.time()
         self.rads = self._compute_radiences()
+        s8 = time.time()
+        # print("radiance time", s8 - s7)
+
+        s9 = time.time()
         self.integrated_rads = self._integrate_radiances(srf_wvlns, sw_srf, lw_srf)
+        s10 = time.time()
+        # print("integration time", s10 - s9)
+        
 
     @staticmethod
     def _parse_metadata(lines):
