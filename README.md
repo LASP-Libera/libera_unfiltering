@@ -49,7 +49,7 @@ Current Results (more metrics available in modeling.ipynb):
 The project includes extensive visualization of both the raw data and model predictions. This helps identify patterns and evaluate the quality of model outputs. Key visualizations include:
 
 Radiance spectra for SW and LW radiation
-* in experiments.ipynb look for the cell RADIANCE GRAPHS, and un comment the functions below
+* in modeling.ipynb look for the cell RADIANCE GRAPHS, and un comment the functions below
 
 Error distribution plots for model predictions
 * available at the bottom of modeling.ipynb
