@@ -482,6 +482,8 @@ class Tape7:
         self.describer_df["Shortwave Filtered Rads (Integrated)"] = shortwave_filtered
         self.describer_df["Longwave Filtered Rads (Integrated)"] = longwave_filtered
 
+        # self.describer_df["Wavelength"] = self.rads[0, 0, :]
+
 
         return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered),
                          np.array(shortwave_filtered), np.array(longwave_filtered)])
