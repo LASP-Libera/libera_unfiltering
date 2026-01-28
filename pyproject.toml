@@ -1,22 +1,26 @@
 [tool.poetry]
 package-mode = false
-
 [project]
 name = "unfiltered-radiances"
-version = "0.0.1"
+version = "0.1.0"
 description = "Libera Unfiltered Radiance Product"
-
 authors = [
     { name = "Caleb" }
 ]
 requires-python = ">=3.11,<4"
-
 dependencies = [
     "libera-utils>=5.5.1,<6.0.0",
     "scikit-learn>=1.3.0,<2.0.0",
     "matplotlib>=3.10.1",
+    "seaborn",
+    "scipy",
+    "plotly",
 ]
-
+[tool.setuptools.packages.find]
+# Only treat 'tp7' and 'prod' as importable packages
+include = ["tp7*", "srfs*", "matt_code*"]
+# Explicitly ignore non-code directories to satisfy setuptools
+exclude = ["data*", "notebooks*", "imgs*", "prod*"]
 [build-system]
 requires = ["poetry-core>=2.0.1"]
 build-backend = "poetry.core.masonry.api"
