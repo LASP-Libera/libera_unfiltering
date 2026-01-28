@@ -72,8 +72,8 @@ def parse_cli_args():
         Parsed command line arguments containing the manifest file path and options
     """
     parser = argparse.ArgumentParser(
-        prog="libera-l2-example-algorithm",
-        description="Libera science data processing template"
+        prog="libera-l2-unfiltered-radiances",
+        description="Libera science data processing for unfiltering radiances"
     )
 
     parser.add_argument(
