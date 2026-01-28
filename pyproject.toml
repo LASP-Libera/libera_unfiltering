@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unfiltering"
+version = "0.1.0"
+description = "Project with tp7 and prod modules"
+dependencies = ["pandas", "numpy", "scikit-learn", "matplotlib", "seaborn", "scipy", "plotly"]
+
+[tool.setuptools.packages.find]
+# Only treat 'tp7' and 'prod' as importable packages
+include = ["tp7*", "srfs*", "matt_code*"]
+
+# Explicitly ignore non-code directories to satisfy setuptools
+exclude = ["data*", "notebooks*", "imgs*", "prod*"]
