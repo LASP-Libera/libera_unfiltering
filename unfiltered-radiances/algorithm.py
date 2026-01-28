@@ -39,7 +39,7 @@ from libera_utils.io.filenaming import (
 )
 from libera_utils import Manifest
 from libera_utils import smart_open
-from libera_utils import DataProductConfig
+from libera_utils.io.netcdf import write_libera_data_product
 from libera_utils.logutil import configure_task_logging
 
 # Configure logging
@@ -239,7 +239,7 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
     logger.info(f"Creating output arrays of size {output_size}")
 
     # Create time stamps (current time repeated)
-    time_data = np.full((output_size,), datetime(2023, 1, 1))
+    time_data = np.full((output_size,), datetime(2028, 1, 1))
 
     # Create sequential constant arrays for each variable
     calibrated_radiance = np.full_like(time_data, 123)
@@ -254,9 +254,8 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
 
     # Package results
     processed_data = {
-        'time_stamp': time_data,
-        'calibrated_radiance': calibrated_radiance,
-        'radiance_uncertainty': radiance_uncertainty,
+        'radiometer_time': time_data,
+        'unfiltered_radiance': calibrated_radiance,
         'latitude': latitude,
         'longitude': longitude,
         'quality_flags': quality_flags
@@ -304,7 +303,7 @@ def create_and_write_data_product(
 
     # Get the product definition file path from the data folder
     script_dir = Path(__file__).parent
-    product_config_file = script_dir / "data" / "example_product_definition.yml"
+    product_config_file = script_dir / "l2-unfiltered-radiance-product-definition.yml"
 
     if not product_config_file.exists():
         raise FileNotFoundError(
@@ -314,34 +313,9 @@ def create_and_write_data_product(
 
     # Step 4: Create DataProductConfig with metadata
     logger.info("Step 4: Setting up data product configuration")
-    data_product_config = DataProductConfig.from_data_config_file(product_config_file)
 
     # Add processed data to each variable defined in the configuration
     logger.info("Adding processed data to variables")
-    data_product_config.add_data_to_variable(
-        variable_name="time_stamp",
-        variable_data=processed_data["time_stamp"]
-    )
-    data_product_config.add_data_to_variable(
-        variable_name="calibrated_radiance",
-        variable_data=processed_data["calibrated_radiance"]
-    )
-    data_product_config.add_data_to_variable(
-        variable_name="radiance_uncertainty",
-        variable_data=processed_data["radiance_uncertainty"]
-    )
-    data_product_config.add_data_to_variable(
-        variable_name="latitude",
-        variable_data=processed_data["latitude"]
-    )
-    data_product_config.add_data_to_variable(
-        variable_name="longitude",
-        variable_data=processed_data["longitude"]
-    )
-    data_product_config.add_data_to_variable(
-        variable_name="quality_flags",
-        variable_data=processed_data["quality_flags"]
-    )
 
     # Step 5: Write the data product file
     logger.info("Step 5: Writing data product to environment specified file")
@@ -352,11 +326,11 @@ def create_and_write_data_product(
     start_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
     end_time = current_time.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-    output_file_path = data_product_config.write(
-        folder_location=output_path,
-        start_time=start_time,
-        end_time=end_time,
-        allow_incomplete=False
+    output_file_path = write_libera_data_product(
+        data_product_definition=product_config_file,
+        data=processed_data,
+        output_path=output_path,
+        time_variable="radiometer_time",
     )
 
     logger.info(f"Data product written to: {output_file_path}")

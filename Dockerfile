@@ -1,4 +1,4 @@
-`FROM python:3.11-slim
+FROM python:3.11-slim
 
 # Install system dependencies
 RUN apt-get update && \
@@ -11,9 +11,9 @@ RUN apt-get update && \
 # Add requirements file in the container - this would be done with git clone for established projects
 COPY pyproject.toml ./pyproject.toml
 # Add source code in the container - this would be done with git clone for established projects
-COPY algorithm.py ./algorithm.py
+COPY ./unfiltered-radiances/algorithm.py ./algorithm.py
 # Add data folder
-COPY data ./data
+COPY ./unfiltered-radiances/l2-unfiltered-radiance-product-definition.yml ./l2-unfiltered-radiance-product-definition.yml
 
 # Handle installs
 # Create virtual environment and permanently activate it for this image
