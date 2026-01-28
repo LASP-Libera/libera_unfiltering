@@ -255,10 +255,10 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
     # Package results
     processed_data = {
         'radiometer_time': time_data,
-        'unfiltered_radiance': calibrated_radiance,
-        'latitude': latitude,
-        'longitude': longitude,
-        'quality_flags': quality_flags
+        'unfiltered_radiance': calibrated_radiance.astype(np.float64),
+        'latitude': latitude.astype(np.float64),
+        'longitude': longitude.astype(np.float64),
+        'quality_flags': quality_flags.astype(np.int32)
     }
 
     logger.info("Science calculations completed")
@@ -331,6 +331,7 @@ def create_and_write_data_product(
         data=processed_data,
         output_path=output_path,
         time_variable="radiometer_time",
+        strict=False
     )
 
     logger.info(f"Data product written to: {output_file_path}")
