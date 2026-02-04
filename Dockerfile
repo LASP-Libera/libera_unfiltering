@@ -11,9 +11,9 @@ RUN apt-get update && \
 # Add requirements file in the container - this would be done with git clone for established projects
 COPY pyproject.toml ./pyproject.toml
 # Add source code in the container - this would be done with git clone for established projects
-COPY ./unfiltered-radiances/algorithm.py ./algorithm.py
-# Add data folder
-COPY ./unfiltered-radiances/l2-unfiltered-radiance-product-definition.yml ./l2-unfiltered-radiance-product-definition.yml
+COPY ./unfiltered_radiances/algorithm.py ./algorithm.py
+# Add product definition file in the container
+COPY ./unfiltered_radiances/l2-unfiltered-radiance-product-definition.yml ./l2-unfiltered-radiance-product-definition.yml
 
 # Handle installs
 # Create virtual environment and permanently activate it for this image

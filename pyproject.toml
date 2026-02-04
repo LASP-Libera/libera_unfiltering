@@ -1,7 +1,5 @@
-[tool.poetry]
-package-mode = false
 [project]
-name = "unfiltered-radiances"
+name = "unfiltered_radiances"
 version = "0.1.0"
 description = "Libera Unfiltered Radiance Product"
 authors = [
@@ -15,6 +13,10 @@ dependencies = [
     "seaborn",
     "scipy",
     "plotly",
+]
+[tool.poetry]
+packages = [
+    { include = "unfiltered_radiances" }
 ]
 [tool.setuptools.packages.find]
 # Only treat 'tp7' and 'prod' as importable packages

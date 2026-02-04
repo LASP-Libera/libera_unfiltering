@@ -145,7 +145,7 @@ def algorithm(manifest_path: Path | S3Path) -> Path | S3Path:
 
     # Step 7: Add data files to output manifest
     logger.info("Step 7: Adding data files to output manifest")
-    output_manifest.add_files(output_data_file_path)
+    output_manifest.add_files(output_data_file_path.path)
 
     # Step 8: Write output manifest to output dropbox folder
     logger.info("Step 8: Writing the output manifest")
@@ -331,7 +331,7 @@ def create_and_write_data_product(
         data=processed_data,
         output_path=output_path,
         time_variable="radiometer_time",
-        strict=False
+        strict=True
     )
 
     logger.info(f"Data product written to: {output_file_path}")
