@@ -18,8 +18,8 @@ from sklearn.linear_model import LinearRegression
 #Custom Imports
 from tp7.tp7 import Tape7
 from srfs.srfs import SRFS
-from matt_code.convert_tp7 import load_all_runs_from_tp7
-from matt_code.make_srf import get_interpolated_srf
+from research.matt_code.convert_tp7 import load_all_runs_from_tp7
+from research.matt_code.make_srf import get_interpolated_srf
 
 
 
