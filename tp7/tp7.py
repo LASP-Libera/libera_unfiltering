@@ -6,7 +6,7 @@ import scipy.integrate as integrate
 import time
 
 class Tape7:
-    def __init__(self, filepath: str, srf_wvlns, sw_srf, lw_srf):
+    def __init__(self, filepath: str, srf_path):
         self.filepath = filepath
         self.tests = []
         self.num_runs = 0
@@ -16,39 +16,18 @@ class Tape7:
         self.describer_df = None
         self.title = None
         self.integrated_rads = None
-        self._init_data(srf_wvlns, sw_srf, lw_srf)
+        self._init_data(srf_path)
 
-    def _init_data(self, srf_wvlns, sw_srf, lw_srf):
+    def _init_data(self, srf_path):
         """
         Initialize the tp7 file and set variables
         """
-        s1 = time.time()
         read_result = self._read_tp7(self.filepath)
-        s2 = time.time()
-        # print("Read result sec", s2 - s1)
-
         self.header_data, self.file_data = read_result[0], read_result[1]
-
-        s3 = time.time()
         self.title = self._get_title(self.filepath)
-        s4 = time.time()
-        # print("Title time", s4 - s3)
-
-        s5 = time.time()
         self.describer_df = self._build_scene_description()
-        s6 = time.time()
-        # print("Describer df sec", s6 - s5)
-
-        s7 = time.time()
         self.rads = self._compute_radiences()
-        s8 = time.time()
-        # print("radiance time", s8 - s7)
-
-        s9 = time.time()
-        self.integrated_rads = self._integrate_radiances(srf_wvlns, sw_srf, lw_srf)
-        s10 = time.time()
-        # print("integration time", s10 - s9)
-        
+        self.integrated_rads = self._integrate_radiances(srf_path)
 
     @staticmethod
     def _parse_metadata(lines):
@@ -460,28 +439,62 @@ class Tape7:
 
         return freq, refl, emit
 
-    def _integrate_radiances(self, srf_wvlns, sw_srf, lw_srf):
+    def load_srf(self, channel: str, version: str = "0-0-1"):
+        file_name = f"./data/SRF/libera_srf_{channel}_v{version}.csv"
+
+        return pd.read_csv(file_name, header=1, names=["Wavelength", "Response"])
+
+    def get_interpolated_srf(self, channel: str,
+                             interpolation_points=np.linspace(0.3, 100, 500),
+                             version: str = "0-0-1"):
+        base_srf_data = self.load_srf(channel, version)
+        return np.interp(interpolation_points, base_srf_data.Wavelength, base_srf_data.Response)
+
+    def _integrate_radiances(self, srf_path):
         """
         Integrate all calculated radiences, without the SRFS - Unfiltered Ground Truth y value
         :return: integrated radiences : array
         """
 
-        interpolated_sw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=sw_srf)
-        interpolated_lw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=lw_srf)
+        wavelengths = np.array(self.rads[0, 0, :])
+
+        ssw_filter = self.get_interpolated_srf("ssw", interpolation_points=wavelengths)
+        sw_filter = self.get_interpolated_srf("sw", interpolation_points=wavelengths)
+        lw_filter = self.get_interpolated_srf("lw", interpolation_points=wavelengths)
+        total_filter = self.get_interpolated_srf("total", interpolation_points=wavelengths)
+
+        # interpolated_sw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=sw_srf)
+        # interpolated_lw_srf = np.interp(x=self.rads[0, 0, :], xp=srf_wvlns, fp=lw_srf)
 
         # rads = (run_num, wv, measurement)
         shortwave_unfiltered = [integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
         longwave_unfiltered = [integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
 
-        shortwave_filtered = [integrate.simpson(y=(run[1] * interpolated_sw_srf), x=run[0]) for run in self.rads]
-        longwave_filtered = [integrate.simpson(y=(run[2] * interpolated_lw_srf), x=run[0]) for run in self.rads]
+        ssw_filtered = [
+            integrate.simpson(y=(run[1] * ssw_filter), x=run[0]) for run in self.rads
+        ]
+        sw_filtered = [
+            integrate.simpson(y=(run[1] * sw_filter), x=run[0]) for run in self.rads
+        ]
+        lw_filtered = [
+            integrate.simpson(y=(run[2] * lw_filter), x=run[0]) for run in self.rads
+        ]
+        total_filtered = [
+            integrate.simpson(
+                y=(run[1] * total_filter) + (run[2] * total_filter), x=run[0]
+            ) for run in self.rads
+        ]
+
+        # shortwave_filtered = [integrate.simpson(y=(run[1] * interpolated_sw_srf), x=run[0]) for run in self.rads]
+        # longwave_filtered = [integrate.simpson(y=(run[2] * interpolated_lw_srf), x=run[0]) for run in self.rads]
 
         self.describer_df["Shortwave Unfiltered Rads (Integrated)"] = shortwave_unfiltered
         self.describer_df["Longwave Unfiltered Rads (Integrated)"] = longwave_unfiltered
 
-        self.describer_df["Shortwave Filtered Rads (Integrated)"] = shortwave_filtered
-        self.describer_df["Longwave Filtered Rads (Integrated)"] = longwave_filtered
-
+        self.describer_df["Shortwave Filtered Rads (Integrated)"] = sw_filtered
+        self.describer_df["Longwave Filtered Rads (Integrated)"] = lw_filtered
+        self.describer_df["Split Shortwave Filtered Rads (Integrated)"] = ssw_filtered
+        self.describer_df["Total Filtered Rads (Integrated)"] = total_filtered
 
         return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered),
-                         np.array(shortwave_filtered), np.array(longwave_filtered)])
+                         np.array(sw_filtered), np.array(lw_filtered), np.array(ssw_filtered), np.array(total_filtered)])
