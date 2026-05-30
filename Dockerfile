@@ -14,6 +14,9 @@ COPY pyproject.toml ./pyproject.toml
 COPY ./unfiltered_radiances/algorithm.py ./algorithm.py
 # Add product definition file in the container
 COPY ./unfiltered_radiances/l2-unfiltered-radiance-product-definition.yml ./l2-unfiltered-radiance-product-definition.yml
+# Add the coefficient generatation code in the container
+COPY ./prod/std/standard_method.py ./standard_method.py
+
 
 # Handle installs
 # Create virtual environment and permanently activate it for this image
