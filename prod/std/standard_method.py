@@ -8,10 +8,12 @@ Workflow:
 
 Run end-to-end:
   from prod.std.standard_method import run
-  run(data_dir="data/", output_path="coefficients.nc")
+  run(data_dir="data/Modtran_3-7_data/", srf_dir="data/SRF/", srf_version="0-0-1", modtran_version="3.7")
 """
 
 import logging
+import subprocess
+import tomllib  # stdlib in Python 3.11+
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,6 +26,9 @@ from sklearn.preprocessing import PolynomialFeatures
 from tp7.tp7 import Tape7, _as_path
 
 logger = logging.getLogger(__name__)
+
+_REPO_ROOT = Path(__file__).parent.parent.parent
+_COEFFICIENTS_DIR = _REPO_ROOT / "coefficients"
 
 # Viewing geometry bins (degrees) — consistent with Loeb et al. (2001)
 SZA_BINS = [
@@ -51,6 +56,33 @@ RAZ_BINS = [
 ]
 
 
+def _code_version() -> str:
+    with open(_REPO_ROOT / "pyproject.toml", "rb") as f:
+        return tomllib.load(f)["project"]["version"]
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=_REPO_ROOT,
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def _build_output_filename(srf_version: str, modtran_version: str) -> Path:
+    version = _code_version()
+    return _COEFFICIENTS_DIR / (
+        f"unfiltering_coefficients"
+        f"_v{version}"
+        f"_srf-{srf_version}"
+        f"_modtran-{modtran_version}"
+        f".nc"
+    )
+
+
 def load_dataset(data_dir, srf_dir=None) -> pd.DataFrame:
     """
     Parse every .tp7 file found under data_dir and return a single concatenated
@@ -69,6 +101,7 @@ def load_dataset(data_dir, srf_dir=None) -> pd.DataFrame:
     pd.DataFrame
         Combined dataset with one row per MODTRAN run across all scene types.
     """
+    #TODO update to use .nc files from S3
     data_path = _as_path(data_dir)
     tp7_files = sorted(data_path.rglob("*.tp7"))
 
@@ -76,6 +109,7 @@ def load_dataset(data_dir, srf_dir=None) -> pd.DataFrame:
         raise FileNotFoundError(f"No .tp7 files found under {data_dir}")
 
     frames = []
+    #TODO build functionality into parser to handle nc files as well instead of just .tp7 files
     for tp7_file in tp7_files:
         logger.info(f"Loading {tp7_file.name}")
         t7 = Tape7(tp7_file, srf_path=srf_dir)
@@ -165,7 +199,12 @@ def generate_unfiltering_coefficients(dataset: pd.DataFrame) -> dict:
     return coefficients
 
 
-def serialize_coefficients(coefficients: dict, output_path) -> Path:
+def serialize_coefficients(
+    coefficients: dict,
+    output_path,
+    srf_version: str = "unknown",
+    modtran_version: str = "unknown",
+) -> Path:
     """
     Write the coefficient dict to a NetCDF file.
 
@@ -186,6 +225,10 @@ def serialize_coefficients(coefficients: dict, output_path) -> Path:
         Output of generate_unfiltering_coefficients().
     output_path : str | Path
         Destination path for the .nc file.
+    srf_version : str
+        SRF version string recorded in the file's global attributes.
+    modtran_version : str
+        MODTRAN version string recorded in the file's global attributes.
 
     Returns
     -------
@@ -209,6 +252,30 @@ def serialize_coefficients(coefficients: dict, output_path) -> Path:
         if ssw_coef is not None:
             ssw_arr[i, j, k] = ssw_coef
 
+    _SW_LW_DESC = (
+        "Quadratic polynomial: m_u = a0 + a1*m_f + a2*m_f^2  "
+        "where m_f is the filtered radiance and m_u is the unfiltered radiance.  "
+        "sw_coef_idx / lw_coef_idx mapping:  "
+        "  0 = a0 (constant offset, W m-2 sr-1);  "
+        "  1 = a1 (linear scaling factor, dimensionless, expected near 1.0);  "
+        "  2 = a2 (quadratic correction, W-1 m2 sr, typically very small).  "
+        "NaN indicates the bin had fewer than 3 samples and no fit was attempted."
+    )
+    _SSW_DESC = (
+        "Multivariate degree-2 polynomial using both filtered SSW and SW radiances as inputs.  "
+        "Prediction: m_u_ssw = c0 + c1*1 + c2*ssw_f + c3*sw_f + c4*ssw_f^2 + c5*ssw_f*sw_f + c6*sw_f^2  "
+        "where ssw_f and sw_f are the filtered split-shortwave and shortwave radiances.  "
+        "ssw_coef_idx mapping:  "
+        "  0 = intercept (LinearRegression bias term);  "
+        "  1 = c1, weight for the constant feature from PolynomialFeatures (near 0, redundant with intercept);  "
+        "  2 = c2, weight for ssw_f (linear SSW term);  "
+        "  3 = c3, weight for sw_f (linear SW term);  "
+        "  4 = c4, weight for ssw_f^2 (quadratic SSW term);  "
+        "  5 = c5, weight for ssw_f*sw_f (cross term);  "
+        "  6 = c6, weight for sw_f^2 (quadratic SW term).  "
+        "NaN indicates the bin had fewer than 3 samples and no fit was attempted."
+    )
+
     ds = xr.Dataset(
         {
             "sw_coefficients": (
@@ -216,7 +283,7 @@ def serialize_coefficients(coefficients: dict, output_path) -> Path:
                 sw_arr,
                 {
                     "long_name": "Shortwave unfiltering polynomial coefficients",
-                    "description": "Quadratic fit: m_u = a0 + a1*m_f + a2*m_f^2",
+                    "description": _SW_LW_DESC,
                     "units": "W m-2 sr-1",
                 },
             ),
@@ -225,7 +292,7 @@ def serialize_coefficients(coefficients: dict, output_path) -> Path:
                 lw_arr,
                 {
                     "long_name": "Longwave unfiltering polynomial coefficients",
-                    "description": "Quadratic fit: m_u = a0 + a1*m_f + a2*m_f^2",
+                    "description": _SW_LW_DESC,
                     "units": "W m-2 sr-1",
                 },
             ),
@@ -234,33 +301,32 @@ def serialize_coefficients(coefficients: dict, output_path) -> Path:
                 ssw_arr,
                 {
                     "long_name": "Split-shortwave unfiltering multivariate polynomial coefficients",
-                    "description": (
-                        "Multivariate degree-2 fit using SSW and SW filtered radiances. "
-                        "Index 0 = intercept; indices 1-6 = PolynomialFeatures weights "
-                        "for [1, ssw_f, sw_f, ssw_f^2, ssw_f*sw_f, sw_f^2]."
-                    ),
+                    "description": _SSW_DESC,
                     "units": "W m-2 sr-1",
                 },
             ),
         },
         coords={
-            "sza_bin": range(n_sza),
-            "vza_bin": range(n_vza),
-            "raz_bin": range(n_raz),
-            "sw_coef_idx":  range(3),
-            "lw_coef_idx":  range(3),
-            "ssw_coef_idx": range(7),
-            "sza_lo": ("sza_bin", [b[0] for b in SZA_BINS]),
-            "sza_hi": ("sza_bin", [b[1] for b in SZA_BINS]),
-            "vza_lo": ("vza_bin", [b[0] for b in VZA_BINS]),
-            "vza_hi": ("vza_bin", [b[1] for b in VZA_BINS]),
-            "raz_lo": ("raz_bin", [b[0] for b in RAZ_BINS]),
-            "raz_hi": ("raz_bin", [b[1] for b in RAZ_BINS]),
+            "sza_bin": ("sza_bin", range(n_sza), {"long_name": "Solar Zenith Angle bin index (0–4); see sza_lo/sza_hi for degree ranges"}),
+            "vza_bin": ("vza_bin", range(n_vza), {"long_name": "Viewing Zenith Angle bin index (0–4); see vza_lo/vza_hi for degree ranges"}),
+            "raz_bin": ("raz_bin", range(n_raz), {"long_name": "Relative Azimuth Angle bin index (0–4); see raz_lo/raz_hi for degree ranges"}),
+            "sw_coef_idx":  ("sw_coef_idx",  range(3), {"long_name": "SW polynomial coefficient index: 0=a0 (offset), 1=a1 (linear), 2=a2 (quadratic)"}),
+            "lw_coef_idx":  ("lw_coef_idx",  range(3), {"long_name": "LW polynomial coefficient index: 0=a0 (offset), 1=a1 (linear), 2=a2 (quadratic)"}),
+            "ssw_coef_idx": ("ssw_coef_idx", range(7), {"long_name": "SSW multivariate coefficient index: 0=intercept, 1=const, 2=ssw_f, 3=sw_f, 4=ssw_f^2, 5=ssw_f*sw_f, 6=sw_f^2"}),
+            "sza_lo": ("sza_bin", [b[0] for b in SZA_BINS], {"long_name": "SZA bin lower bound (degrees)"}),
+            "sza_hi": ("sza_bin", [b[1] for b in SZA_BINS], {"long_name": "SZA bin upper bound (degrees)"}),
+            "vza_lo": ("vza_bin", [b[0] for b in VZA_BINS], {"long_name": "VZA bin lower bound (degrees)"}),
+            "vza_hi": ("vza_bin", [b[1] for b in VZA_BINS], {"long_name": "VZA bin upper bound (degrees)"}),
+            "raz_lo": ("raz_bin", [b[0] for b in RAZ_BINS], {"long_name": "RAZ bin lower bound (degrees)"}),
+            "raz_hi": ("raz_bin", [b[1] for b in RAZ_BINS], {"long_name": "RAZ bin upper bound (degrees)"}),
         },
         attrs={
             "title": "Libera unfiltering regression coefficients",
-            "source": "MODTRAN 3.7 radiative transfer simulations",
             "method": "Scene-stratified quadratic regression (Loeb et al. 2001)",
+            "coefficient_version": _code_version(),
+            "srf_version": srf_version,
+            "modtran_version": modtran_version,
+            "git_commit": _git_commit(),
             "created_utc": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -271,7 +337,13 @@ def serialize_coefficients(coefficients: dict, output_path) -> Path:
     return output_path
 
 
-def run(data_dir, output_path="coefficients.nc", srf_dir=None) -> Path:
+def run(
+    data_dir,
+    srf_dir,
+    srf_version: str,
+    modtran_version: str,
+    output_path=None,
+) -> Path:
     """
     End-to-end coefficient generation: load data, fit, and write .nc file.
 
@@ -279,10 +351,17 @@ def run(data_dir, output_path="coefficients.nc", srf_dir=None) -> Path:
     ----------
     data_dir : str | Path | S3Path
         Root directory containing MODTRAN .tp7 files.
-    output_path : str | Path
-        Destination for the output NetCDF file.
-    srf_dir : str | Path | S3Path, optional
-        SRF file directory.  Defaults to local data/SRF/.
+    srf_dir : str | Path | S3Path
+        Directory containing the Libera SRF CSV files.
+    srf_version : str
+        SRF version string, e.g. "0-0-1".  Recorded in the output filename
+        and .nc global attributes.
+    modtran_version : str
+        MODTRAN version string, e.g. "3.7".  Recorded in the .nc global
+        attributes.
+    output_path : str | Path, optional
+        Destination for the .nc file.  Defaults to
+        coefficients/unfiltering_coefficients_v{code}_srf-{srf}_modtran-{modtran}.nc
 
     Returns
     -------
@@ -291,6 +370,9 @@ def run(data_dir, output_path="coefficients.nc", srf_dir=None) -> Path:
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
+    if output_path is None:
+        output_path = _build_output_filename(srf_version, modtran_version)
+
     logger.info("Step 1: Loading dataset")
     dataset = load_dataset(data_dir, srf_dir=srf_dir)
 
@@ -298,4 +380,9 @@ def run(data_dir, output_path="coefficients.nc", srf_dir=None) -> Path:
     coefficients = generate_unfiltering_coefficients(dataset)
 
     logger.info("Step 3: Serializing to NetCDF")
-    return serialize_coefficients(coefficients, output_path)
+    return serialize_coefficients(
+        coefficients,
+        output_path,
+        srf_version=srf_version,
+        modtran_version=modtran_version,
+    )
