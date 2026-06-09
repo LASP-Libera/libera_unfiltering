@@ -101,7 +101,8 @@ def load_dataset(data_dir, srf_dir=None) -> pd.DataFrame:
     pd.DataFrame
         Combined dataset with one row per MODTRAN run across all scene types.
     """
-    #TODO update to use .nc files from S3
+    #TODO update to use .nc files from S3 
+    #TODO look into cloudpathlib to handle both local and S3 paths with the same code class is called AnyPath
     data_path = _as_path(data_dir)
     tp7_files = sorted(data_path.rglob("*.tp7"))
 
