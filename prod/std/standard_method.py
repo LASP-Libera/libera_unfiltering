@@ -55,6 +55,9 @@ RAZ_BINS = [
     (165.0, 180.0),
 ]
 
+SCENE_TYPES = ["Land", "Cloudy Ocean", "Clear Ocean", "Snow", "Deep Convective Cloud"]
+CLOUD_VALUES = [0, 1]
+
 
 def _code_version() -> str:
     with open(_REPO_ROOT / "pyproject.toml", "rb") as f:
@@ -123,9 +126,9 @@ def load_dataset(data_dir, srf_dir=None) -> pd.DataFrame:
 
 def generate_unfiltering_coefficients(dataset: pd.DataFrame) -> dict:
     """
-    Fit quadratic regression coefficients per SZA/VZA/RAZ bin.
+    Fit quadratic regression coefficients per scene/cloud/SZA/VZA/RAZ bin.
 
-    For SW and LW channels a univariate degree-2 polynomial is fit:
+    For SW, LW, and TOT channels a univariate degree-2 polynomial is fit:
         m_u = a0 + a1*m_f + a2*m_f^2
 
     For SSW a multivariate degree-2 polynomial is fit using both the SSW and SW
@@ -134,19 +137,22 @@ def generate_unfiltering_coefficients(dataset: pd.DataFrame) -> dict:
     Parameters
     ----------
     dataset : pd.DataFrame
-        Output of load_dataset() — must contain the six integrated radiance columns.
+        Output of load_dataset() — must contain Scene, Cloud, and all integrated
+        radiance columns including Total Unfiltered Rads (Integrated).
 
     Returns
     -------
     dict
-        Keys are (sza_bin, vza_bin, raz_bin) tuples.
-        Values are (sw_coef, ssw_coef, lw_coef) where:
+        Keys are (scene_idx, cloud, sza_bin, vza_bin, raz_bin) tuples where
+        scene_idx is an index into SCENE_TYPES and cloud is 0 or 1.
+        Values are (sw_coef, ssw_coef, lw_coef, tot_coef) where:
           sw_coef  : ndarray shape (3,)  — [a0, a1, a2]
           lw_coef  : ndarray shape (3,)  — [a0, a1, a2]
+          tot_coef : ndarray shape (3,)  — [a0, a1, a2]
           ssw_coef : ndarray shape (7,)  — [intercept, c1..c6] where c1..c6 are
                      PolynomialFeatures(degree=2) weights for
                      [1, ssw_f, sw_f, ssw_f^2, ssw_f*sw_f, sw_f^2]
-          Any of the three may be None if the bin contains insufficient data.
+          Any of the four may be None if the bin contains insufficient data.
     """
     coefficients = {}
 
@@ -157,46 +163,68 @@ def generate_unfiltering_coefficients(dataset: pd.DataFrame) -> dict:
         for raz_bin in RAZ_BINS
     ]
 
-    for sza_bin, vza_bin, raz_bin in angular_bins:
-        binned = dataset[
-            (dataset["SZA"].between(*sza_bin)) &
-            (dataset["VZA"].between(*vza_bin)) &
-            (dataset["RAZ"].between(*raz_bin))
-        ]
+    total_bins = len(SCENE_TYPES) * len(CLOUD_VALUES) * len(angular_bins)
 
-        sw_coef = ssw_coef = lw_coef = None
+    for scene_idx, scene_name in enumerate(SCENE_TYPES):
+        for cloud in CLOUD_VALUES:
+            scene_cloud_data = dataset[
+                (dataset["Scene"] == scene_name) &
+                (dataset["Cloud"] == cloud)
+            ]
 
-        if len(binned) >= 3:
-            try:
-                filtered_sw   = binned["Shortwave Filtered Rads (Integrated)"]
-                unfiltered_sw = binned["Shortwave Unfiltered Rads (Integrated)"]
-                filtered_lw   = binned["Longwave Filtered Rads (Integrated)"]
-                unfiltered_lw = binned["Longwave Unfiltered Rads (Integrated)"]
-                filtered_ssw  = binned["Split Shortwave Filtered Rads (Integrated)"]
+            for sza_bin, vza_bin, raz_bin in angular_bins:
+                binned = scene_cloud_data[
+                    (scene_cloud_data["SZA"].between(*sza_bin)) &
+                    (scene_cloud_data["VZA"].between(*vza_bin)) &
+                    (scene_cloud_data["RAZ"].between(*raz_bin))
+                ]
 
-                fit_sw = np.polynomial.polynomial.Polynomial.fit(filtered_sw, unfiltered_sw, 2)
-                sw_coef = fit_sw.convert().coef
+                sw_coef = ssw_coef = lw_coef = tot_coef = None
 
-                fit_lw = np.polynomial.polynomial.Polynomial.fit(filtered_lw, unfiltered_lw, 2)
-                lw_coef = fit_lw.convert().coef
+                if len(binned) >= 3:
+                    try:
+                        filtered_sw   = binned["Shortwave Filtered Rads (Integrated)"]
+                        unfiltered_sw = binned["Shortwave Unfiltered Rads (Integrated)"]
+                        filtered_lw   = binned["Longwave Filtered Rads (Integrated)"]
+                        unfiltered_lw = binned["Longwave Unfiltered Rads (Integrated)"]
+                        filtered_ssw  = binned["Split Shortwave Filtered Rads (Integrated)"]
+                        filtered_tot  = binned["Total Filtered Rads (Integrated)"]
+                        unfiltered_tot = binned["Total Unfiltered Rads (Integrated)"]
 
-                X = np.vstack([filtered_ssw, filtered_sw]).T
-                poly = PolynomialFeatures(degree=2)
-                X_poly = poly.fit_transform(X)
-                reg = LinearRegression()
-                reg.fit(X_poly, unfiltered_sw.values)
-                # Store intercept as index 0, feature weights as indices 1-6
-                ssw_coef = np.concatenate([[reg.intercept_], reg.coef_])
+                        fit_sw = np.polynomial.polynomial.Polynomial.fit(filtered_sw, unfiltered_sw, 2)
+                        sw_coef = fit_sw.convert().coef
 
-            except Exception as e:
-                logger.warning(f"Fit failed for bin {(sza_bin, vza_bin, raz_bin)}: {e}")
-        else:
-            logger.debug(f"Skipping sparse bin {(sza_bin, vza_bin, raz_bin)} ({len(binned)} samples)")
+                        fit_lw = np.polynomial.polynomial.Polynomial.fit(filtered_lw, unfiltered_lw, 2)
+                        lw_coef = fit_lw.convert().coef
 
-        coefficients[(sza_bin, vza_bin, raz_bin)] = (sw_coef, ssw_coef, lw_coef)
+                        fit_tot = np.polynomial.polynomial.Polynomial.fit(filtered_tot, unfiltered_tot, 2)
+                        tot_coef = fit_tot.convert().coef
+
+                        X = np.vstack([filtered_ssw, filtered_sw]).T
+                        poly = PolynomialFeatures(degree=2)
+                        X_poly = poly.fit_transform(X)
+                        reg = LinearRegression()
+                        reg.fit(X_poly, unfiltered_sw.values)
+                        # Store intercept as index 0, feature weights as indices 1-6
+                        ssw_coef = np.concatenate([[reg.intercept_], reg.coef_])
+
+                    except Exception as e:
+                        logger.warning(
+                            f"Fit failed for bin ({scene_name}, cloud={cloud}, "
+                            f"{(sza_bin, vza_bin, raz_bin)}): {e}"
+                        )
+                else:
+                    logger.debug(
+                        f"Skipping sparse bin ({scene_name}, cloud={cloud}, "
+                        f"{(sza_bin, vza_bin, raz_bin)}) ({len(binned)} samples)"
+                    )
+
+                coefficients[(scene_idx, cloud, sza_bin, vza_bin, raz_bin)] = (
+                    sw_coef, ssw_coef, lw_coef, tot_coef
+                )
 
     filled = sum(1 for v in coefficients.values() if v[0] is not None)
-    logger.info(f"Coefficients generated for {filled}/{len(angular_bins)} bins")
+    logger.info(f"Coefficients generated for {filled}/{total_bins} bins")
     return coefficients
 
 
@@ -211,11 +239,14 @@ def serialize_coefficients(
 
     Dimensions
     ----------
+    scene        : 0–4  — index into SCENE_TYPES
+    cloud        : 0–1  — binary cloud flag (0=no cloud, 1=any cloud)
     sza_bin, vza_bin, raz_bin : int (0–4)
         Bin indices.  Corresponding angle ranges stored as auxiliary
         coordinates sza_lo/sza_hi, vza_lo/vza_hi, raz_lo/raz_hi.
     sw_coef_idx  : 0–2  — polynomial order [a0, a1, a2]
     lw_coef_idx  : 0–2  — polynomial order [a0, a1, a2]
+    tot_coef_idx : 0–2  — polynomial order [a0, a1, a2]
     ssw_coef_idx : 0–6  — [intercept, 1, ssw_f, sw_f, ssw_f^2, ssw_f*sw_f, sw_f^2]
 
     Sparse bins (no data) are stored as NaN.
@@ -236,27 +267,33 @@ def serialize_coefficients(
     Path
         Resolved path to the written file.
     """
+    n_scene = len(SCENE_TYPES)
+    n_cloud = len(CLOUD_VALUES)
     n_sza, n_vza, n_raz = len(SZA_BINS), len(VZA_BINS), len(RAZ_BINS)
 
-    sw_arr  = np.full((n_sza, n_vza, n_raz, 3), np.nan)
-    lw_arr  = np.full((n_sza, n_vza, n_raz, 3), np.nan)
-    ssw_arr = np.full((n_sza, n_vza, n_raz, 7), np.nan)
+    sw_arr  = np.full((n_scene, n_cloud, n_sza, n_vza, n_raz, 3), np.nan)
+    lw_arr  = np.full((n_scene, n_cloud, n_sza, n_vza, n_raz, 3), np.nan)
+    tot_arr = np.full((n_scene, n_cloud, n_sza, n_vza, n_raz, 3), np.nan)
+    ssw_arr = np.full((n_scene, n_cloud, n_sza, n_vza, n_raz, 7), np.nan)
 
-    for (sza_bin, vza_bin, raz_bin), (sw_coef, ssw_coef, lw_coef) in coefficients.items():
+    for (scene_idx, cloud, sza_bin, vza_bin, raz_bin), (sw_coef, ssw_coef, lw_coef, tot_coef) in coefficients.items():
         i = SZA_BINS.index(sza_bin)
         j = VZA_BINS.index(vza_bin)
         k = RAZ_BINS.index(raz_bin)
+        c = CLOUD_VALUES.index(cloud)
         if sw_coef is not None:
-            sw_arr[i, j, k]  = sw_coef
+            sw_arr[scene_idx, c, i, j, k]  = sw_coef
         if lw_coef is not None:
-            lw_arr[i, j, k]  = lw_coef
+            lw_arr[scene_idx, c, i, j, k]  = lw_coef
+        if tot_coef is not None:
+            tot_arr[scene_idx, c, i, j, k] = tot_coef
         if ssw_coef is not None:
-            ssw_arr[i, j, k] = ssw_coef
+            ssw_arr[scene_idx, c, i, j, k] = ssw_coef
 
-    _SW_LW_DESC = (
+    _POLY_DESC = (
         "Quadratic polynomial: m_u = a0 + a1*m_f + a2*m_f^2  "
         "where m_f is the filtered radiance and m_u is the unfiltered radiance.  "
-        "sw_coef_idx / lw_coef_idx mapping:  "
+        "coef_idx mapping:  "
         "  0 = a0 (constant offset, W m-2 sr-1);  "
         "  1 = a1 (linear scaling factor, dimensionless, expected near 1.0);  "
         "  2 = a2 (quadratic correction, W-1 m2 sr, typically very small).  "
@@ -277,43 +314,40 @@ def serialize_coefficients(
         "NaN indicates the bin had fewer than 3 samples and no fit was attempted."
     )
 
+    dims_poly = ["scene", "cloud", "sza_bin", "vza_bin", "raz_bin", "coef_idx"]
+    dims_ssw  = ["scene", "cloud", "sza_bin", "vza_bin", "raz_bin", "ssw_coef_idx"]
+
     ds = xr.Dataset(
         {
             "sw_coefficients": (
-                ["sza_bin", "vza_bin", "raz_bin", "sw_coef_idx"],
+                dims_poly,
                 sw_arr,
-                {
-                    "long_name": "Shortwave unfiltering polynomial coefficients",
-                    "description": _SW_LW_DESC,
-                    "units": "W m-2 sr-1",
-                },
+                {"long_name": "Shortwave unfiltering polynomial coefficients", "description": _POLY_DESC, "units": "W m-2 sr-1"},
             ),
             "lw_coefficients": (
-                ["sza_bin", "vza_bin", "raz_bin", "lw_coef_idx"],
+                dims_poly,
                 lw_arr,
-                {
-                    "long_name": "Longwave unfiltering polynomial coefficients",
-                    "description": _SW_LW_DESC,
-                    "units": "W m-2 sr-1",
-                },
+                {"long_name": "Longwave unfiltering polynomial coefficients", "description": _POLY_DESC, "units": "W m-2 sr-1"},
+            ),
+            "tot_coefficients": (
+                dims_poly,
+                tot_arr,
+                {"long_name": "Total channel unfiltering polynomial coefficients", "description": _POLY_DESC, "units": "W m-2 sr-1"},
             ),
             "ssw_coefficients": (
-                ["sza_bin", "vza_bin", "raz_bin", "ssw_coef_idx"],
+                dims_ssw,
                 ssw_arr,
-                {
-                    "long_name": "Split-shortwave unfiltering multivariate polynomial coefficients",
-                    "description": _SSW_DESC,
-                    "units": "W m-2 sr-1",
-                },
+                {"long_name": "Split-shortwave unfiltering multivariate polynomial coefficients", "description": _SSW_DESC, "units": "W m-2 sr-1"},
             ),
         },
         coords={
-            "sza_bin": ("sza_bin", range(n_sza), {"long_name": "Solar Zenith Angle bin index (0–4); see sza_lo/sza_hi for degree ranges"}),
-            "vza_bin": ("vza_bin", range(n_vza), {"long_name": "Viewing Zenith Angle bin index (0–4); see vza_lo/vza_hi for degree ranges"}),
-            "raz_bin": ("raz_bin", range(n_raz), {"long_name": "Relative Azimuth Angle bin index (0–4); see raz_lo/raz_hi for degree ranges"}),
-            "sw_coef_idx":  ("sw_coef_idx",  range(3), {"long_name": "SW polynomial coefficient index: 0=a0 (offset), 1=a1 (linear), 2=a2 (quadratic)"}),
-            "lw_coef_idx":  ("lw_coef_idx",  range(3), {"long_name": "LW polynomial coefficient index: 0=a0 (offset), 1=a1 (linear), 2=a2 (quadratic)"}),
-            "ssw_coef_idx": ("ssw_coef_idx", range(7), {"long_name": "SSW multivariate coefficient index: 0=intercept, 1=const, 2=ssw_f, 3=sw_f, 4=ssw_f^2, 5=ssw_f*sw_f, 6=sw_f^2"}),
+            "scene":       ("scene", SCENE_TYPES, {"long_name": "Scene type"}),
+            "cloud":       ("cloud", CLOUD_VALUES, {"long_name": "Cloud binary flag (0=no cloud, 1=any cloud)"}),
+            "sza_bin":     ("sza_bin", range(n_sza), {"long_name": "Solar Zenith Angle bin index (0–4); see sza_lo/sza_hi for degree ranges"}),
+            "vza_bin":     ("vza_bin", range(n_vza), {"long_name": "Viewing Zenith Angle bin index (0–4); see vza_lo/vza_hi for degree ranges"}),
+            "raz_bin":     ("raz_bin", range(n_raz), {"long_name": "Relative Azimuth Angle bin index (0–4); see raz_lo/raz_hi for degree ranges"}),
+            "coef_idx":    ("coef_idx",    range(3), {"long_name": "Polynomial coefficient index: 0=a0 (offset), 1=a1 (linear), 2=a2 (quadratic)"}),
+            "ssw_coef_idx":("ssw_coef_idx", range(7), {"long_name": "SSW multivariate coefficient index: 0=intercept, 1=const, 2=ssw_f, 3=sw_f, 4=ssw_f^2, 5=ssw_f*sw_f, 6=sw_f^2"}),
             "sza_lo": ("sza_bin", [b[0] for b in SZA_BINS], {"long_name": "SZA bin lower bound (degrees)"}),
             "sza_hi": ("sza_bin", [b[1] for b in SZA_BINS], {"long_name": "SZA bin upper bound (degrees)"}),
             "vza_lo": ("vza_bin", [b[0] for b in VZA_BINS], {"long_name": "VZA bin lower bound (degrees)"}),
@@ -323,7 +357,7 @@ def serialize_coefficients(
         },
         attrs={
             "title": "Libera unfiltering regression coefficients",
-            "method": "Scene-stratified quadratic regression (Loeb et al. 2001)",
+            "method": "Scene/cloud-stratified quadratic regression (Loeb et al. 2001)",
             "coefficient_version": _code_version(),
             "srf_version": srf_version,
             "modtran_version": modtran_version,

@@ -9,3 +9,5 @@ data/
 .idea
 poetry.lock
 CLAUDE.md
+notes/
+env_activate.sh
