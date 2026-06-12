@@ -372,9 +372,12 @@ class Tape7:
         lw_filter = self.get_interpolated_srf("lw", interpolation_points=wavelengths)
         total_filter = self.get_interpolated_srf("total", interpolation_points=wavelengths)
 
+        ssw_passband = (ssw_filter > 0).astype(float)
+
         shortwave_unfiltered = [integrate.simpson(y=run[1], x=run[0]) for run in self.rads]
         longwave_unfiltered = [integrate.simpson(y=run[2], x=run[0]) for run in self.rads]
         total_unfiltered = [integrate.simpson(y=(run[1] + run[2]), x=run[0]) for run in self.rads]
+        ssw_unfiltered = [integrate.simpson(y=(run[1] * ssw_passband), x=run[0]) for run in self.rads]
 
         ssw_filtered = [
             integrate.simpson(y=(run[1] * ssw_filter), x=run[0]) for run in self.rads
@@ -394,11 +397,13 @@ class Tape7:
         self.describer_df["Shortwave Unfiltered Rads (Integrated)"] = shortwave_unfiltered
         self.describer_df["Longwave Unfiltered Rads (Integrated)"] = longwave_unfiltered
         self.describer_df["Total Unfiltered Rads (Integrated)"] = total_unfiltered
+        self.describer_df["Split Shortwave Unfiltered Rads (Integrated)"] = ssw_unfiltered
         self.describer_df["Shortwave Filtered Rads (Integrated)"] = sw_filtered
         self.describer_df["Longwave Filtered Rads (Integrated)"] = lw_filtered
         self.describer_df["Split Shortwave Filtered Rads (Integrated)"] = ssw_filtered
         self.describer_df["Total Filtered Rads (Integrated)"] = total_filtered
 
         return np.array([np.array(shortwave_unfiltered), np.array(longwave_unfiltered),
-                         np.array(total_unfiltered), np.array(sw_filtered), np.array(lw_filtered),
+                         np.array(total_unfiltered), np.array(ssw_unfiltered),
+                         np.array(sw_filtered), np.array(lw_filtered),
                          np.array(ssw_filtered), np.array(total_filtered)])

@@ -25,15 +25,14 @@ class TestGenerateCoefficients:
         result = generate_unfiltering_coefficients(sample_dataset)
         # sample_dataset is Land, cloud=0, bin (0,0,0)
         sw, ssw, lw, tot = result[(0, 0, SZA_BINS[0], VZA_BINS[0], RAZ_BINS[0])]
-        assert sw.shape == (3,)
+        assert sw.shape == (7,)
+        assert ssw.shape == (7,)
         assert lw.shape == (3,)
         assert tot.shape == (3,)
-        assert ssw.shape == (7,)
 
     def test_linear_term_near_one(self, sample_dataset):
         result = generate_unfiltering_coefficients(sample_dataset)
-        sw, _, lw, tot = result[(0, 0, SZA_BINS[0], VZA_BINS[0], RAZ_BINS[0])]
-        assert abs(sw[1] - 1.0) < 0.15
+        _, _, lw, tot = result[(0, 0, SZA_BINS[0], VZA_BINS[0], RAZ_BINS[0])]
         assert abs(lw[1] - 1.0) < 0.15
         assert abs(tot[1] - 1.0) < 0.15
 
@@ -65,6 +64,7 @@ class TestGenerateCoefficients:
             "Longwave Filtered Rads (Integrated)": [30.0, 32.0],
             "Longwave Unfiltered Rads (Integrated)": [31.0, 33.0],
             "Split Shortwave Filtered Rads (Integrated)": [10.0, 11.0],
+            "Split Shortwave Unfiltered Rads (Integrated)": [10.2, 11.2],
             "Total Filtered Rads (Integrated)": [110.0, 117.0],
             "Total Unfiltered Rads (Integrated)": [113.0, 120.0],
         })
@@ -75,10 +75,8 @@ class TestGenerateCoefficients:
     def test_all_values_are_floats(self, sample_dataset):
         result = generate_unfiltering_coefficients(sample_dataset)
         sw, ssw, lw, tot = result[(0, 0, SZA_BINS[0], VZA_BINS[0], RAZ_BINS[0])]
-        assert sw.dtype.kind == 'f'
-        assert lw.dtype.kind == 'f'
-        assert tot.dtype.kind == 'f'
-        assert ssw.dtype.kind == 'f'
+        for coef in (sw, ssw, lw, tot):
+            assert coef.dtype.kind == 'f'
 
 
 class TestSerializeCoefficients:
@@ -102,16 +100,22 @@ class TestSerializeCoefficients:
         serialize_coefficients(minimal_coefficients, out)
         ds = xr.open_dataset(out)
         sw = ds["sw_coefficients"]
-        assert sw.dims == ("scene", "cloud", "sza_bin", "vza_bin", "raz_bin", "coef_idx")
-        assert sw.shape == (5, 2, 5, 5, 5, 3)
+        assert sw.dims == ("scene", "cloud", "sza_bin", "vza_bin", "raz_bin", "multi_coef_idx")
+        assert sw.shape == (5, 2, 5, 5, 5, 7)
 
     def test_ssw_dimensions_and_shape(self, tmp_path, minimal_coefficients):
         out = tmp_path / "coefs.nc"
         serialize_coefficients(minimal_coefficients, out)
         ds = xr.open_dataset(out)
         ssw = ds["ssw_coefficients"]
-        assert ssw.dims == ("scene", "cloud", "sza_bin", "vza_bin", "raz_bin", "ssw_coef_idx")
+        assert ssw.dims == ("scene", "cloud", "sza_bin", "vza_bin", "raz_bin", "multi_coef_idx")
         assert ssw.shape == (5, 2, 5, 5, 5, 7)
+
+    def test_multi_coef_idx_length(self, tmp_path, minimal_coefficients):
+        out = tmp_path / "coefs.nc"
+        serialize_coefficients(minimal_coefficients, out)
+        ds = xr.open_dataset(out)
+        assert ds.sizes["multi_coef_idx"] == 7
 
     def test_tot_dimensions_and_shape(self, tmp_path, minimal_coefficients):
         out = tmp_path / "coefs.nc"

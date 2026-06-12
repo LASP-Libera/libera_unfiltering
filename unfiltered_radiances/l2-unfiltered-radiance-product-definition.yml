@@ -10,6 +10,10 @@
 attributes:
   ProductID: UNF-RAD
   algorithm_version: 0.1.0
+  lw_regression_method: "Univariate regression"
+  sw_regression_method: "Univariate regression"
+  ssw_regression_method: "Multivariate quadratic regression"
+  tot_regression_method: "Univariate regression"
 
 coordinates:
   radiometer_time:
@@ -25,11 +29,35 @@ coordinates:
       dtype: int64
 
 variables:
-  unfiltered_radiance:
-    long_name: "Unfiltered radiance measurements"
+  shortwave_unfiltered_radiance:
+    long_name: "Shortwave Unfiltered radiance measurements"
     dimensions: ["radiometer_time"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
-    valid_range: [0, 1000]  # Adjust based on your expected data range
+    valid_range: [0, 1000]  
+    missing_value: -9999.0
+    dtype: float64
+
+  longwave_unfiltered_radiance:
+    long_name: "Longwave Unfiltered radiance measurements"
+    dimensions: ["radiometer_time"]
+    units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
+    valid_range: [0, 1000]  
+    missing_value: -9999.0
+    dtype: float64
+
+  split_shortwave_unfiltered_radiance:
+    long_name: "SplitShortwave Unfiltered radiance measurements"
+    dimensions: ["radiometer_time"]
+    units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
+    valid_range: [0, 1000]  
+    missing_value: -9999.0
+    dtype: float64
+
+  total_unfiltered_radiance:
+    long_name: "Total Unfiltered radiance measurements"
+    dimensions: ["radiometer_time"]
+    units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
+    valid_range: [0, 1000]  
     missing_value: -9999.0
     dtype: float64
 
