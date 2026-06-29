@@ -58,6 +58,41 @@ ds.close()
 
 
 --------------------------------------------------------------
+  DOCKER — BUILD AND TEST LOCALLY
+--------------------------------------------------------------
+
+docker build -t libera-l2-unfiltered-radiances .
+
+# Confirm entrypoint works
+docker run --rm libera-l2-unfiltered-radiances --help
+
+# Full test run (mount local manifest and output dir)
+export PROCESSING_PATH=/tmp/libera_test_output
+mkdir -p $PROCESSING_PATH
+docker run --rm \
+  -e PROCESSING_PATH=/output \
+  -v $PROCESSING_PATH:/output \
+  -v $(pwd)/data/manifest:/manifests:ro \
+  libera-l2-unfiltered-radiances \
+  /manifests/LIBERA_INPUT_MANIFEST_01KVRA2GC8R3NGRTE5J8X2P8PE.json
+
+# Inspect output
+ls /tmp/libera_test_output/
+
+
+--------------------------------------------------------------
+  DOCKER — PUSH TO AWS ECR
+--------------------------------------------------------------
+
+export AWS_ACCOUNT_ID=<your-account-id>
+export AWS_REGION=us-east-1
+bash scripts/push_to_ecr.sh
+
+# Optional overrides:
+# IMAGE_TAG=v0.1.0 AWS_ACCOUNT_ID=... AWS_REGION=... bash scripts/push_to_ecr.sh
+
+
+--------------------------------------------------------------
   GENERATE THE TWO-FILE MANIFEST (one-time setup)
 --------------------------------------------------------------
 
