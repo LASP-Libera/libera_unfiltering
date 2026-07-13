@@ -3,7 +3,7 @@ Full end-to-end pipeline integration test.
 
 Covers three stages in sequence:
   1. Coefficient generation — load all MODTRAN 3.7 Tape7 files, fit regression, write .nc
-  2. L2 algorithm run     — load L1B + FMATCH-CAM from manifest, classify scene/cloud,
+  2. L2 algorithm run     — load L1B + SCENE-ID-CAM from manifest, classify scene/cloud,
                             apply unfiltering, write output NetCDF and manifest
   3. Output verification  — check structure, variables, and that some samples are filled
 

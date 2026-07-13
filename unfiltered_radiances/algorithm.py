@@ -3,7 +3,7 @@ Libera L2 Unfiltered Radiances algorithm.
 
 Implements the 8-step Libera SDC processing workflow:
 1. Read input manifest
-2. Load all NetCDF inputs (L1B RAD-4CH + FMATCH-CAM)
+2. Load all NetCDF inputs (L1B RAD-4CH + SCENE-ID-CAM)
 3. Classify scene/cloud from CAM; apply polynomial regression to produce unfiltered radiances
 4-5. Write NetCDF data product
 6-8. Create and write output manifest
@@ -112,9 +112,9 @@ def _get_l1b_dataset(all_input_data: dict[str, xr.Dataset]) -> xr.Dataset:
 
 def _get_cam_dataset(all_input_data: dict[str, xr.Dataset]) -> xr.Dataset:
     for ds in all_input_data.values():
-        if ds.attrs.get("ProductID") == "FMATCH-CAM":
+        if ds.attrs.get("ProductID") == "SCENE-ID-CAM":
             return ds
-    raise KeyError("No FMATCH-CAM dataset found in manifest")
+    raise KeyError("No SCENE-ID-CAM dataset found in manifest")
 
 
 def _find_coefficient_file() -> Path:
@@ -132,11 +132,11 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
     Step 3: Classify scene/cloud from CAM file, then apply unfiltering regression.
 
     Reads filtered radiances and angles from L1B, derives per-sample scene/cloud
-    from the FMATCH-CAM file, looks up regression coefficients per angular bin,
+    from the SCENE-ID-CAM file, looks up regression coefficients per angular bin,
     and applies the polynomial model to produce four unfiltered radiance channels.
     """
     from unfiltered_radiances.unfiltering import (
-        classify_scene_cloud,
+        classify_scene_from_scene_id_cam,
         apply_unfiltering,
         load_coefficients,
     )
@@ -161,12 +161,17 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
 
     logger.info(f"L1B loaded: {len(times)} samples")
 
+    # SCENE-ID-CAM stores time as 'radiometer_time' (lowercase) against 'RADIOMETER_TIME'
+    # (uppercase) dimension — they don't auto-pair into an index, so promote explicitly.
+    if "radiometer_time" in cam_ds.coords and "RADIOMETER_TIME" not in cam_ds.coords:
+        cam_ds = cam_ds.assign_coords(RADIOMETER_TIME=cam_ds["radiometer_time"])
+
     # Align CAM to L1B times (nearest-neighbor handles synthetic example mismatches;
     # in production both files share the same RADIOMETER_TIME values)
     l1b_times = l1b_ds["radiometer_time"].values
     cam_aligned = cam_ds.sel(RADIOMETER_TIME=l1b_times, method="nearest")
 
-    scene_idx, cloud = classify_scene_cloud(cam_aligned)
+    scene_idx, cloud = classify_scene_from_scene_id_cam(cam_aligned)
 
     scene_counts = {SCENE_TYPES[i]: int((scene_idx == i).sum()) for i in range(len(SCENE_TYPES))}
     logger.info(f"Scene classification: {scene_counts}")

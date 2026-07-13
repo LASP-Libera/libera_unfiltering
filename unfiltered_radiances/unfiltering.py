@@ -18,6 +18,10 @@ _DCC_OT_THRESHOLD = 10.0
 _IGBP_OCEAN = 17
 _IGBP_SNOW = 15
 
+_CF_PCT_THRESHOLD = 10.0  # cloud fraction in % (SCENE-ID-CAM uses 0–100 scale)
+_TRMM_OCEAN = 0
+_TRMM_SNOW  = 5
+
 _IDX_LAND    = SCENE_TYPES.index("Land")
 _IDX_CLO_OCE = SCENE_TYPES.index("Cloudy Ocean")
 _IDX_CLR_OCE = SCENE_TYPES.index("Clear Ocean")
@@ -66,6 +70,38 @@ def classify_scene_cloud(cam_ds: xr.Dataset) -> tuple[np.ndarray, np.ndarray]:
 
     # Priority 4: Land — already the default in scene_idx
 
+    return scene_idx, cloud
+
+
+def classify_scene_from_scene_id_cam(cam_ds: xr.Dataset) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Derive per-sample scene index and binary cloud flag from a SCENE-ID-CAM dataset.
+
+    DCC is not detectable without cloud optical thickness — those samples fall
+    into Cloudy Ocean (if ocean surface) or Land based on surface type.
+
+    Returns
+    -------
+    scene_idx : np.ndarray[int], shape (n,)
+        Index into SCENE_TYPES for each sample.
+    cloud : np.ndarray[int], shape (n,)
+        0 = no cloud, 1 = cloud present (cloud_fraction > 10%).
+    """
+    surface_type = cam_ds["surface_type"].values   # TRMM enum int
+    cf           = cam_ds["cloud_fraction"].values  # 0–100 %
+
+    n         = len(surface_type)
+    scene_idx = np.full(n, _IDX_LAND, dtype=int)
+    cloud     = (cf > _CF_PCT_THRESHOLD).astype(int)
+
+    snow = surface_type == _TRMM_SNOW
+    scene_idx[snow] = _IDX_SNOW
+
+    ocean = surface_type == _TRMM_OCEAN
+    scene_idx[ocean & (cf >  _CF_PCT_THRESHOLD)] = _IDX_CLO_OCE
+    scene_idx[ocean & (cf <= _CF_PCT_THRESHOLD)] = _IDX_CLR_OCE
+
+    # Land: TRMM types 1–4 (HiShrub, LowShrub, DarkDesert, BrightDesert) — already default
     return scene_idx, cloud
 
 
