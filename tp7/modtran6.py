@@ -1,4 +1,15 @@
-"""Modtran6NC class — parses MODTRAN 6 .nc output into a describer_df-compatible DataFrame."""
+"""
+Modtran6NC — parses MODTRAN 6 NetCDF output into a describer_df-compatible DataFrame.
+
+MODTRAN 6 produces one .nc file per scene/geometry combination. This module reads
+those files, integrates the spectral radiance against Libera's SRF filters, and
+returns a DataFrame with the same column contract as ``tp7.Tape7`` so that both
+data sources can feed into ``prod.std.standard_method.generate_unfiltering_coefficients()``.
+
+The MODTRAN 6 pathway is currently blocked on receiving the full dataset from the SDC
+team (S3 path needed). Once available, pass the data directory to
+``standard_method.run_nc()`` to regenerate the coefficient cube.
+"""
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -20,19 +31,51 @@ def _as_path(p):
 
 _DEFAULT_SRF_DIR = Path(__file__).parent.parent / "data" / "SRF"
 
-# Maps CERES_TRMM_Scene_ID (int) → one of the 5 unfiltering scene type strings.
-# Confirmed: 5=Clear Ocean, 18=Cloudy Ocean. Extend when new Scene_IDs appear in the full dataset.
+# Maps CERES_TRMM_Scene_ID integer values from MODTRAN 6 .nc files to the 5 Loeb
+# unfiltering scene type strings defined in prod.std.standard_method.SCENE_TYPES.
+#
+# INCOMPLETE — only scenes observed in the sample M6 dataset have been confirmed:
+#   5  → Clear Ocean
+#   18 → Cloudy Ocean
+#
+# TODO (SDC team): When the full MODTRAN 6 dataset is available, identify the
+# CERES_TRMM_Scene_ID values for Land, Snow, and Deep Convective Cloud and add them here.
+# The map must cover all 5 entries to avoid ValueError in _determine_scene_and_cloud().
 CERES_SCENE_MAP: dict[int, str] = {
     5: "Clear Ocean",
     18: "Cloudy Ocean",
+    # Add remaining scene IDs once the full M6 dataset is available:
+    # ??: "Land",
+    # ??: "Snow",
+    # ??: "Deep Convective Cloud",
 }
 
-DCC_CLDC_THRESHOLD = 0.10
-DCC_CLD_OT_THRESHOLD = 10.0
+# DCC detection thresholds from Loeb et al. (2001). These mirror the values in
+# unfiltered_radiances/unfiltering.py (_CLOUD_FRACTION_THRESHOLD, _DCC_OT_THRESHOLD).
+# Both files must stay in sync if thresholds are ever changed.
+DCC_CLDC_THRESHOLD = 0.10   # cloud fraction (0–1 scale) above which DCC is possible
+DCC_CLD_OT_THRESHOLD = 10.0  # cloud optical thickness above which scene is classified as DCC
 
 
 class Modtran6NC:
+    """Parse a single MODTRAN 6 NetCDF output file into a describer_df-compatible DataFrame.
+
+    The resulting ``describer_df`` has one row per (VZA, RAA, SZA) angle combination
+    and the same column contract as ``tp7.Tape7.describer_df``, making both MODTRAN
+    versions interchangeable as input to
+    ``prod.std.standard_method.generate_unfiltering_coefficients()``.
+    """
+
     def __init__(self, nc_path, srf_path=None):
+        """
+        Parameters
+        ----------
+        nc_path : str | Path | S3Path
+            Path to a MODTRAN 6 output NetCDF file.
+        srf_path : str | Path | S3Path | None
+            Directory containing Libera SRF CSV files. Defaults to ``data/SRF/``
+            relative to the repository root.
+        """
         self.nc_path = _as_path(nc_path)
         self.srf_path = _as_path(srf_path) if srf_path is not None else _DEFAULT_SRF_DIR
         ds = xr.open_dataset(nc_path)
@@ -41,18 +84,67 @@ class Modtran6NC:
         finally:
             ds.close()
 
-    def load_srf(self, channel: str, version: str = "0-0-1"):
+    def load_srf(self, channel: str, version: str = "0-0-1") -> pd.DataFrame:
+        """Load a Libera spectral response function (SRF) CSV for one channel.
+
+        Parameters
+        ----------
+        channel : str
+            Libera channel name: ``"sw"``, ``"ssw"``, ``"lw"``, or ``"total"``.
+        version : str
+            SRF version string embedded in the filename, e.g. ``"0-0-1"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            Two-column DataFrame with ``Wavelength`` (µm) and ``Response`` (dimensionless).
+        """
         # TODO: extract to shared srf_utils module alongside tp7.py
         srf_file = self.srf_path / f"libera_srf_{channel}_v{version}.csv"
         with srf_file.open("r") as f:
             return pd.read_csv(f, header=1, names=["Wavelength", "Response"])
 
-    def get_interpolated_srf(self, channel: str, interpolation_points=np.linspace(0.3, 100, 500), version: str = "0-0-1"):
+    def get_interpolated_srf(self, channel: str, interpolation_points=np.linspace(0.3, 100, 500), version: str = "0-0-1") -> np.ndarray:
+        """Return the SRF interpolated onto a custom wavelength axis.
+
+        Parameters
+        ----------
+        channel : str
+            Libera channel name: ``"sw"``, ``"ssw"``, ``"lw"``, or ``"total"``.
+        interpolation_points : array-like
+            Wavelength values (µm) at which to evaluate the SRF. Defaults to
+            500 evenly-spaced points from 0.3 to 100 µm.
+        version : str
+            SRF version string, passed to :meth:`load_srf`.
+
+        Returns
+        -------
+        np.ndarray
+            SRF response values (dimensionless) at each ``interpolation_points`` wavelength.
+        """
         # TODO: extract to shared srf_utils module alongside tp7.py
         base_srf_data = self.load_srf(channel, version)
         return np.interp(interpolation_points, base_srf_data.Wavelength, base_srf_data.Response)
 
-    def _determine_scene_and_cloud(self, ds: xr.Dataset):
+    def _determine_scene_and_cloud(self, ds: xr.Dataset) -> tuple[str, int]:
+        """Map a MODTRAN 6 dataset to a Loeb scene type string and binary cloud flag.
+
+        DCC is evaluated first (before consulting ``CERES_SCENE_MAP``) because the
+        CERES scene ID alone cannot distinguish DCC from ordinary cloudy ocean; the
+        threshold check on ``FV3_CLDC`` and ``FV3_CLD_OT`` takes precedence.
+
+        Returns
+        -------
+        scene_type : str
+            One of the 5 Loeb scene types in ``prod.std.standard_method.SCENE_TYPES``.
+        cloud : int
+            1 if any cloud is present (``FV3_CLDC > 0``), else 0.
+
+        Raises
+        ------
+        ValueError
+            If ``CERES_TRMM_Scene_ID`` is not in ``CERES_SCENE_MAP`` (incomplete map).
+        """
         cldc = float(ds["FV3_CLDC"].values)
         cld_ot = float(ds["FV3_CLD_OT"].values)
 
@@ -70,6 +162,19 @@ class Modtran6NC:
         return scene_type, cloud
 
     def _build_describer_df(self, ds: xr.Dataset) -> pd.DataFrame:
+        """Build a describer DataFrame from one MODTRAN 6 NetCDF file.
+
+        Iterates angle combinations in ``(vza, raa, sza)`` order — matching the
+        ``(vza, raa, sza, wavelength)`` layout of the spectral radiance arrays in ``ds``
+        — and delegates to :meth:`_integrate_radiances` to append broadband columns.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per (VZA, RAA, SZA) triple. Columns include ``SZA``, ``VZA``,
+            ``RAZ``, ``Scene``, ``Cloud``, ``Run #``, and all eight radiance columns
+            (filtered and unfiltered for SW, SSW, LW, and Total).
+        """
         scene_type, cloud = self._determine_scene_and_cloud(ds)
 
         sza_vals = ds["CERES_TRMM_SZA"].values   # (9,)
@@ -92,6 +197,15 @@ class Modtran6NC:
         return df
 
     def _integrate_radiances(self, ds: xr.Dataset, df: pd.DataFrame) -> None:
+        """Spectrally integrate MODTRAN 6 radiances against Libera SRFs, writing results into ``df``.
+
+        Spectral radiance from MODTRAN 6 is in W m⁻² sr⁻¹ nm⁻¹. Integration over
+        wavelength (nm) via Simpson's rule yields broadband radiance (W m⁻² sr⁻¹).
+        SRF files use µm, so wavelength axes are converted to µm only for SRF lookup.
+
+        Eight columns are written in-place into ``df``:
+        unfiltered (SW, SSW, LW, Total) and filtered (SW, SSW, LW, Total).
+        """
         sw_spec = ds["MODTRAN6_SPECTRAL_RADIANCE_TOA_SW_WVL_CERES_TRMM"].values  # (vza, raa, sza, wvl_sw)
         lw_spec = ds["MODTRAN6_SPECTRAL_RADIANCE_TOA_LW_WVL_CERES_TRMM"].values  # (vza, raa, sza, wvl_lw)
         # Spectral radiance is in W m⁻² sr⁻¹ nm⁻¹; integrate over nm to get W m⁻² sr⁻¹.

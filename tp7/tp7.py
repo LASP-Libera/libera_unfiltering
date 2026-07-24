@@ -1,4 +1,19 @@
-"""Tape7 class, turns tp7 data file into its own object"""
+"""
+Tape7 — parser for MODTRAN 3.7 "tape7" output files.
+
+A tape7 file is a fixed-format text file produced by MODTRAN 3.7. It contains:
+  - A sequence of header "cards" (metadata lines) for each simulation run, followed by
+    a data block of per-wavenumber radiance columns.
+
+The number of header cards varies by scene type (12 or 14 columns → 13 or 12 card lines).
+Data blocks have either 4000 rows (daytime, 400–4000 cm⁻¹) or 4996 rows (nighttime,
+400–4996 cm⁻¹) depending on whether the file starts with 'F' (solar flux flag).
+
+``Tape7`` reads a single .tp7 file, extracts all simulation runs, converts wavenumbers
+to wavelength, applies the Jacobian unit transform, and integrates spectral radiance
+against Libera SRF filters to produce a ``describer_df`` DataFrame ready for coefficient
+generation in ``prod.std.standard_method``.
+"""
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -21,7 +36,26 @@ _DEFAULT_SRF_DIR = Path(__file__).parent.parent / "data" / "SRF"
 
 
 class Tape7:
+    """Parse one MODTRAN 3.7 tape7 file into a describer_df-compatible DataFrame.
+
+    After construction, ``describer_df`` has one row per simulation run with columns
+    for SZA, VZA, RAZ, Scene, Cloud, Run #, and all eight radiance integrals
+    (filtered and unfiltered for SW, SSW, LW, and Total).  This is the same column
+    contract as ``Modtran6NC.describer_df``, so both feed directly into
+    ``prod.std.standard_method.generate_unfiltering_coefficients()``.
+    """
+
     def __init__(self, filepath, srf_path=None):
+        """
+        Parameters
+        ----------
+        filepath : str | Path | S3Path
+            Path to a MODTRAN 3.7 tape7 text file. The filename prefix determines
+            the Loeb scene type: ``lnd``, ``ocecld``, ``oceclr``, ``sno``, ``dc``.
+        srf_path : str | Path | S3Path | None
+            Directory containing Libera SRF CSV files. Defaults to ``data/SRF/``
+            relative to the repository root.
+        """
         self.filepath = _as_path(filepath)
         self.srf_path = _as_path(srf_path) if srf_path is not None else _DEFAULT_SRF_DIR
         self.tests = []
@@ -35,6 +69,7 @@ class Tape7:
         self._init_data()
 
     def _init_data(self):
+        """Parse the file and populate all instance attributes in one pass."""
         read_result = self._read_tp7(self.filepath)
         self.header_data, self.file_data = read_result[0], read_result[1]
         self.title = self._get_title(self.filepath)
@@ -44,6 +79,24 @@ class Tape7:
 
     @staticmethod
     def _parse_metadata(lines):
+        """Extract run dimensions from the first two header cards of the tape7 file.
+
+        Returns
+        -------
+        size : int
+            Number of wavenumber rows per run. 4000 for daytime runs (400–4000 cm⁻¹,
+            first character of line 0 is 'F' for solar flux enabled); 4996 for
+            nighttime runs (400–4996 cm⁻¹, no solar component).
+        num_cols : int
+            Number of data columns in the wavenumber data block (12 or 14 depending
+            on the MODTRAN 3.7 run configuration used to generate the file).
+        num_runs : int
+            Total number of simulation runs stacked in the file.
+        start_index : int
+            Number of header card lines that precede each data block. 13 for 12-column
+            files; 12 for 14-column files (the two MODTRAN 3.7 formats differ by one
+            card in their header layout).
+        """
         day_or_night = lines[0]
         size = 4000 if day_or_night[0] == 'F' else 4996
 
@@ -57,6 +110,14 @@ class Tape7:
 
     @staticmethod
     def _get_title(filepath):
+        """Return the Loeb scene type string inferred from the tape7 filename prefix.
+
+        Filename convention: ``<prefix>_<rest>.tp7`` where prefix is one of:
+        ``lnd`` (Land), ``ocecld`` (Cloudy Ocean), ``oceclr`` (Clear Ocean),
+        ``sno`` (Snow), ``dc`` (Deep Convective Cloud).
+
+        Raises ValueError for unrecognised prefixes so bad filenames fail fast.
+        """
         scene_type = filepath.name.split('_')[0]
 
         file_to_title = {
@@ -74,6 +135,16 @@ class Tape7:
         return title
 
     def _read_tp7(self, filepath):
+        """Read a tape7 text file and return header cards and numeric data block.
+
+        Returns
+        -------
+        list[list[str]]
+            ``header_data[i][j]`` — the j-th header card line for run i.
+        np.ndarray, shape (size, num_cols, num_runs)
+            Numeric data block: rows = wavenumber steps, cols = output columns,
+            depth = simulation runs.
+        """
         with filepath.open('r') as file:
             lines = file.readlines()
 
@@ -98,6 +169,13 @@ class Tape7:
         return [lst, grid]
 
     def _build_scene_description(self):
+        """Populate angle/cloud metadata for all runs and return a describer DataFrame.
+
+        Reads SZA, VZA, RAZ, and cloud parameters from the header cards for every run,
+        then delegates per-scene parsing to ``_populate_scene_data()``. For Land and DCC
+        scenes, VZA is stored in the file as a sensor-to-surface angle (>90°) and is
+        converted to the standard viewing zenith (``180 - vza``) before returning.
+        """
         num_runs = self.num_runs = np.shape(self.file_data)[2]
         header_data = self.header_data
 
@@ -126,6 +204,26 @@ class Tape7:
     def _populate_scene_data(self, i, title, scene, runnumber, sza, vza, raz, headerdata, cldtype,
                             cldalt, cldthick, cldext, surfacetemp, albedomodel, met, windspd,
                             atmmodel, season, aerosoltype):
+        """Extract angle and cloud parameters for run ``i`` from its header cards.
+
+        Header card layout (0-indexed lines within each run block):
+          - Card 0 : atmosphere model, surface temperature, albedo model
+          - Card 1 : aerosol type, season, ICLD (cloud type code), meteorology, wind speed
+          - Card 2 : cloud layer altitude/thickness detail (for certain ICLD types)
+          - Card 5 : VZA (zenith angle of observation direction for Land and DCC scenes)
+          - Cards 10/11 : SZA, VZA, RAZ depending on scene type
+
+        ICLD codes (MODTRAN 3.7 cloud type integer):
+          0  = No cloud
+          1  = Cumulus         (calt=0.66 km, cthick=2.34 km, cext=92.6 km⁻¹)
+          3  = Stratus         (calt=0.5 km,  cthick=0.2 km,  cext=28 km⁻¹)
+          4  = Strato-cumulus  (calt=0.1 km,  cthick=0.4 km,  cext=10 km⁻¹) — Snow only
+          18 = Cirrus          (calt=7 km,    cthick=1–2 km,  cext=4–6 km⁻¹)
+          19 = Subvisual cirrus (calt=10 km,  cthick=0.3 km,  cext=1 km⁻¹)  — Snow only
+
+        calt/cthick/cext units: km altitude above ground, km geometric thickness,
+        km⁻¹ extinction coefficient.
+        """
         scene.append(title)
         runnumber.append(i)
 
@@ -294,6 +392,12 @@ class Tape7:
 
     def _create_description_dataframe(self, title, scene, sza, vza, raz, cldtype, cldalt, cldthick, cldext, surfacetemp,
                                      albedomodel, met, windspd, atmmodel, season, aerosoltype, runnumber):
+        """Assemble metadata arrays into a DataFrame with a binary ``Cloud`` column.
+
+        Cloud is encoded as 0 (no cloud) or 1 (any cloud). Clear Ocean and DCC scenes
+        always have fixed cloud values (0 and 1 respectively); other scenes derive cloud
+        from the ICLD code parsed in ``_populate_scene_data()``.
+        """
         mapping = {"No Cloud": 0, "Anycloud": 1}
 
         data = None
@@ -313,6 +417,23 @@ class Tape7:
         return pd.DataFrame(data)
 
     def _compute_radiences(self):
+        """Convert MODTRAN wavenumber output to wavelength-based spectral radiance.
+
+        MODTRAN outputs radiance as a function of wavenumber ν (cm⁻¹). Two conversions:
+
+        1. Wavelength: ``lam = (1/ν) × 1e4``  [cm⁻¹ → µm]
+        2. Jacobian: ``L_λ = L_ν × ν²``       [W cm⁻² sr⁻¹ cm → W m⁻² sr⁻¹ µm⁻¹]
+
+        The factor ν² comes from |dν/dλ| = ν²/λ² evaluated at λ=1/ν. This produces
+        spectral radiance per µm so that SRF integration (also in µm) is dimensionally
+        consistent.
+
+        Returns
+        -------
+        np.ndarray, shape (num_runs, 3, 4000)
+            Axis 1: [wavelength (µm), SW spectral radiance, LW spectral radiance].
+            Values are in ascending wavelength order (MODTRAN outputs descending ν).
+        """
         num_runs = self.num_runs
         tp7data = self.file_data
         colnums = self._get_column_numbers(tp7data)
@@ -322,7 +443,9 @@ class Tape7:
         for i in range(num_runs):
             freq, refl, emit = self._calculate_radiances_for_run(i, tp7data, colnums)
             self.tests.append(freq[0])
+            # wavenumber (cm⁻¹) → wavelength (µm)
             lam = (1.0000000000000000000000000 / freq) * 1E4
+            # Jacobian unit conversion: L_ν × ν² = L_λ
             swrad = (freq ** 2.00) * refl
             lwrad = (freq ** 2.00) * emit
 
@@ -335,6 +458,20 @@ class Tape7:
         return self.rads
 
     def _get_column_numbers(self, tp7data):
+        """Return zero-indexed column positions for the five radiance quantities.
+
+        Returns ``[freq, sfctot, thmsfcref, pathscat, tot]`` for the active format:
+
+        12-column format: freq=1, sfctot=6, thmsfcref=10, pathscat=5, tot=4
+        14-column format: freq=0, sfctot=7, thmsfcref=13, pathscat=5, tot=9
+
+        Column semantics:
+          freq      — wavenumber (cm⁻¹)
+          sfctot    — surface-to-space total radiance
+          thmsfcref — thermal surface reflected radiance (the thermal component of sfctot)
+          pathscat  — path-scattered solar radiance
+          tot       — total radiance (solar + thermal)
+        """
         if tp7data.shape[1] == 12:
             return [1, 6, 10, 5, 4]
         elif tp7data.shape[1] == 14:
@@ -343,28 +480,90 @@ class Tape7:
             raise ValueError("Error with tp7data: Unexpected number of columns")
 
     def _calculate_radiances_for_run(self, run_index, tp7data, colnums):
+        """Decompose total radiance into reflected-solar and emitted-thermal components.
+
+        Radiance decomposition (Loeb et al. 2001 unfiltering framework):
+          reflected solar = path-scattered + surface-total - thermal-surface-reflected
+                         = pathscat + sfctot - thmsfcref
+          emitted thermal = total - reflected solar
+
+        This isolates the solar (SW) from the thermal (LW) signal so each can be
+        integrated against its respective SRF passband.
+
+        Returns
+        -------
+        freq : np.ndarray
+            Wavenumber axis (cm⁻¹).
+        refl : np.ndarray
+            Reflected solar spectral radiance (MODTRAN native units).
+        emit : np.ndarray
+            Emitted thermal spectral radiance (MODTRAN native units).
+        """
         freq = tp7data[:, int(colnums[0]), run_index]
         tot = tp7data[:, int(colnums[4]), run_index]
         sfctot = tp7data[:, int(colnums[1]), run_index]
         thmsfcref = tp7data[:, int(colnums[2]), run_index]
         pathscat = tp7data[:, int(colnums[3]), run_index]
+        # reflected solar = scattered path + surface total - thermal surface component
         refl = pathscat + sfctot - thmsfcref
         emit = tot - refl
 
         return freq, refl, emit
 
-    def load_srf(self, channel: str, version: str = "0-0-1"):
+    def load_srf(self, channel: str, version: str = "0-0-1") -> pd.DataFrame:
+        """Load a Libera SRF CSV for one channel.
+
+        Parameters
+        ----------
+        channel : str
+            ``"sw"``, ``"ssw"``, ``"lw"``, or ``"total"``.
+        version : str
+            SRF version string embedded in the filename, e.g. ``"0-0-1"``.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: ``Wavelength`` (µm) and ``Response`` (dimensionless).
+        """
         srf_file = self.srf_path / f"libera_srf_{channel}_v{version}.csv"
         with srf_file.open('r') as f:
             return pd.read_csv(f, header=1, names=["Wavelength", "Response"])
 
     def get_interpolated_srf(self, channel: str,
                              interpolation_points=np.linspace(0.3, 100, 500),
-                             version: str = "0-0-1"):
+                             version: str = "0-0-1") -> np.ndarray:
+        """Return the SRF interpolated onto a custom wavelength axis.
+
+        Parameters
+        ----------
+        channel : str
+            ``"sw"``, ``"ssw"``, ``"lw"``, or ``"total"``.
+        interpolation_points : array-like
+            Wavelength values (µm) at which to evaluate the SRF.
+        version : str
+            SRF version string, passed to :meth:`load_srf`.
+
+        Returns
+        -------
+        np.ndarray
+            Dimensionless SRF response at each ``interpolation_points`` wavelength.
+        """
         base_srf_data = self.load_srf(channel, version)
         return np.interp(interpolation_points, base_srf_data.Wavelength, base_srf_data.Response)
 
     def _integrate_radiances(self):
+        """Integrate spectral radiance against Libera SRFs to produce broadband values.
+
+        All integrations use Simpson's rule over the µm wavelength axis from
+        ``_compute_radiences()``. Spectral radiance (W m⁻² sr⁻¹ µm⁻¹) × SRF
+        (dimensionless) integrated over µm → broadband radiance (W m⁻² sr⁻¹).
+
+        The SSW passband is a binary mask (SRF > 0) for the unfiltered integral and
+        the actual SRF curve for the filtered integral.
+
+        Writes all eight radiance columns into ``self.describer_df`` in-place and also
+        returns them as a (8, num_runs) ndarray.
+        """
         wavelengths = np.array(self.rads[0, 0, :])
 
         ssw_filter = self.get_interpolated_srf("ssw", interpolation_points=wavelengths)

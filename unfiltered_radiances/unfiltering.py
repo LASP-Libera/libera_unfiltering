@@ -9,6 +9,9 @@ from sklearn.preprocessing import PolynomialFeatures
 
 from prod.std.standard_method import CLOUD_VALUES, SCENE_TYPES
 
+# Angular bin edges from Loeb et al. (2001), Table 1.
+# Loeb, N. G., Kato, S., & Wielicki, B. A. (2001). Defining top-of-atmosphere flux
+# reference level for Earth Radiation Budget studies. Journal of Climate.
 _SZA_EDGES = [0.0, 22.2, 41.4, 60.0, 75.5, 85.0]
 _VZA_EDGES = [0.0, 15.0, 30.0, 45.0, 60.0, 90.0]
 _RAZ_EDGES = [0.0, 15.0, 60.0, 120.0, 165.0, 180.0]
@@ -34,8 +37,17 @@ def load_coefficients(coef_path: Path | str) -> xr.Dataset:
 
 
 def classify_scene_cloud(cam_ds: xr.Dataset) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Derive per-sample scene index and binary cloud flag from a FMATCH-CAM dataset.
+    """Derive per-sample scene index and binary cloud flag from a FMATCH-CAM dataset.
+
+    .. deprecated::
+        This function targets the legacy FMATCH-CAM ancillary file format
+        (``ProductID="FMATCH-CAM"``), which read raw VIIRS/NISE variables
+        (``igbp_surface_type``, ``viirs_cloud_cloud_fraction``,
+        ``viirs_cloud_cloud_optical_thickness``, ``nise_permanent_ice``,
+        ``nise_dry_snow_on_land``).
+
+        The production pipeline now uses SCENE-ID-CAM instead. Call
+        :func:`classify_scene_from_scene_id_cam` for new code.
 
     Returns
     -------
@@ -157,7 +169,7 @@ def apply_unfiltering(
     lw_u  = np.full(n, np.nan, dtype=float)
     tot_u = np.full(n, np.nan, dtype=float)
 
-    poly = PolynomialFeatures(degree=2, include_bias=True)
+    poly = PolynomialFeatures(degree=2, include_bias=True)  # quadratic per Loeb et al. (2001)
 
     sw_coefs  = coef_ds["sw_coefficients"].values   # (5, 2, 5, 5, 5, 7)
     ssw_coefs = coef_ds["ssw_coefficients"].values

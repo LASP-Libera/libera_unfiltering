@@ -6,9 +6,18 @@ Workflow:
   2. generate_unfiltering_coefficients() — fit regression per SZA/VZA/RAZ bin
   3. serialize_coefficients()            — write the result to a NetCDF file
 
-Run end-to-end:
-  from prod.std.standard_method import run
-  run(data_dir="data/Modtran_3-7_data/", srf_dir="data/SRF/", srf_version="0-0-1", modtran_version="3.7")
+Two data sources are supported:
+
+  MODTRAN 3.7 (current):
+    from prod.std.standard_method import run
+    run(data_dir="data/Modtran_3-7_data/", srf_dir="data/SRF/",
+        srf_version="0-0-1", modtran_version="3.7")
+
+  MODTRAN 6 (blocked on SDC team providing the S3 data path):
+    from prod.std.standard_method import run_nc
+    run_nc(data_dir="<S3_PATH_FROM_SDC>", srf_dir="data/SRF/",
+           srf_version="0-0-1", modtran_version="6")
+    Before running: complete CERES_SCENE_MAP in tp7/modtran6.py for all 5 Loeb scenes.
 """
 
 import logging
@@ -30,7 +39,9 @@ logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).parent.parent.parent
 _COEFFICIENTS_DIR = _REPO_ROOT / "coefficients"
 
-# Viewing geometry bins (degrees) — consistent with Loeb et al. (2001)
+# Viewing geometry angular bins (degrees) from Loeb et al. (2001), Table 1.
+# Loeb, N. G., Kato, S., & Wielicki, B. A. (2001). Defining top-of-atmosphere flux
+# reference level for Earth Radiation Budget studies. Journal of Climate.
 SZA_BINS = [
     (0.0, 22.2),
     (22.2, 41.4),
@@ -130,10 +141,21 @@ def load_nc_dataset(data_dir, srf_dir=None) -> pd.DataFrame:
     a single concatenated describer_df with integrated filtered and unfiltered
     radiances — same column contract as load_dataset().
 
+    Each .nc file represents one scene/geometry combination produced by MODTRAN 6.
+    ``Modtran6NC`` reads the spectral radiance arrays, determines scene type from
+    ``CERES_TRMM_Scene_ID`` (via ``CERES_SCENE_MAP`` in tp7/modtran6.py), and
+    integrates against the Libera SRFs.
+
+    .. note::
+        The MODTRAN 6 dataset is currently unavailable. The SDC team must provide
+        the S3 path before this function can be used in production.  Before running,
+        also complete ``CERES_SCENE_MAP`` in ``tp7/modtran6.py`` for all 5 Loeb scenes.
+
     Parameters
     ----------
     data_dir : str | Path | S3Path
         Root directory containing the MODTRAN 6 .nc files (searched recursively).
+        In production this will be an S3 path supplied by the SDC team.
     srf_dir : str | Path | S3Path, optional
         Directory containing the Libera SRF CSV files.  Defaults to the local
         data/SRF/ directory relative to the repo root.
@@ -218,6 +240,8 @@ def generate_unfiltering_coefficients(dataset: pd.DataFrame) -> dict:
 
                 sw_coef = ssw_coef = lw_coef = tot_coef = None
 
+                # Minimum 3 samples: the quadratic fit has 3 free parameters (a0, a1, a2),
+                # so fewer than 3 points would produce a degenerate/ill-conditioned system.
                 if len(binned) >= 3:
                     try:
                         filtered_sw    = binned["Shortwave Filtered Rads (Integrated)"]
@@ -449,6 +473,63 @@ def run(
 
     logger.info("Step 1: Loading dataset")
     dataset = load_dataset(data_dir, srf_dir=srf_dir)
+
+    logger.info("Step 2: Generating coefficients")
+    coefficients = generate_unfiltering_coefficients(dataset)
+
+    logger.info("Step 3: Serializing to NetCDF")
+    return serialize_coefficients(
+        coefficients,
+        output_path,
+        srf_version=srf_version,
+        modtran_version=modtran_version,
+    )
+
+
+def run_nc(
+    data_dir,
+    srf_dir,
+    srf_version: str,
+    modtran_version: str = "6",
+    output_path=None,
+) -> Path:
+    """
+    End-to-end coefficient generation from MODTRAN 6 .nc files.
+
+    Identical workflow to ``run()`` but uses ``load_nc_dataset()`` and ``Modtran6NC``
+    instead of ``load_dataset()`` and ``Tape7``.
+
+    .. note::
+        Blocked on the SDC team providing the S3 path to the MODTRAN 6 dataset.
+        Also requires completing ``CERES_SCENE_MAP`` in ``tp7/modtran6.py`` for all
+        5 Loeb scene types before this will produce correct coefficients.
+
+    Parameters
+    ----------
+    data_dir : str | Path | S3Path
+        Root directory containing MODTRAN 6 .nc files (local or S3).
+    srf_dir : str | Path | S3Path
+        Directory containing the Libera SRF CSV files.
+    srf_version : str
+        SRF version string, e.g. ``"0-0-1"``.
+    modtran_version : str
+        MODTRAN version label recorded in the output file, defaults to ``"6"``.
+    output_path : str | Path, optional
+        Destination for the .nc file. Defaults to the standard naming convention
+        in the ``coefficients/`` directory.
+
+    Returns
+    -------
+    Path
+        Path to the written coefficients file.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+    if output_path is None:
+        output_path = _build_output_filename(srf_version, modtran_version)
+
+    logger.info("Step 1: Loading MODTRAN 6 dataset")
+    dataset = load_nc_dataset(data_dir, srf_dir=srf_dir)
 
     logger.info("Step 2: Generating coefficients")
     coefficients = generate_unfiltering_coefficients(dataset)

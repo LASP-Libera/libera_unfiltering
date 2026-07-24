@@ -160,7 +160,7 @@ class TestFullPipeline:
 
     def test_product_id_attribute(self, pipeline_output):
         with xr.open_dataset(pipeline_output["nc_files"][0]) as ds:
-            assert ds.attrs.get("ProductID") == "UNF-RAD"
+            assert ds.attrs.get("ProductID") == "UNF-RAD-CAM"
 
     def test_some_samples_filled(self, pipeline_output):
         with xr.open_dataset(pipeline_output["nc_files"][0]) as ds:

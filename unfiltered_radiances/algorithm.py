@@ -31,6 +31,7 @@ _DEFAULT_COEF_DIR = _REPO_ROOT / "coefficients"
 
 
 def main():
+    """CLI entry point. Parses arguments, runs the algorithm, and logs the output manifest path."""
     now = datetime.now(UTC)
     args = parse_cli_args()
     configure_task_logging(f"example_algorithm_{now}")
@@ -43,6 +44,14 @@ def main():
 
 
 def parse_cli_args():
+    """Parse command-line arguments.
+
+    Returns
+    -------
+    argparse.Namespace
+        `.manifest` : str — absolute path to the input manifest file
+        `.verbose`  : bool — enable DEBUG-level logging
+    """
     parser = argparse.ArgumentParser(
         prog="libera-l2-unfiltered-radiances",
         description="Libera science data processing for unfiltering radiances"
@@ -53,6 +62,18 @@ def parse_cli_args():
 
 
 def algorithm(manifest_path: Path | S3Path) -> Path | S3Path:
+    """Orchestrate the 8-step Libera SDC unfiltered radiances processing workflow.
+
+    Parameters
+    ----------
+    manifest_path : Path | S3Path
+        Absolute path to the input manifest JSON file (local or S3).
+
+    Returns
+    -------
+    Path | S3Path
+        Path to the output manifest file written by step 8.
+    """
     logger.info("Step 1: Reading the input manifest file")
     input_manifest = Manifest.from_file(manifest_path)
     logger.info(f"Loaded manifest with {len(input_manifest.files)} files")
@@ -87,6 +108,18 @@ def algorithm(manifest_path: Path | S3Path) -> Path | S3Path:
 
 
 def read_all_input_data(input_manifest: Manifest) -> dict[str, xr.Dataset]:
+    """Load every NetCDF file listed in the manifest into memory.
+
+    Parameters
+    ----------
+    input_manifest : Manifest
+        Parsed input manifest containing file paths and checksums.
+
+    Returns
+    -------
+    dict[str, xr.Dataset]
+        Mapping of filename → loaded xarray Dataset (all variables loaded into RAM).
+    """
     all_data = {}
     for i, file_info in enumerate(input_manifest.files):
         logger.info(f"Reading file {i + 1}/{len(input_manifest.files)}: {file_info.filename}")
@@ -104,6 +137,11 @@ def read_all_input_data(input_manifest: Manifest) -> dict[str, xr.Dataset]:
 
 
 def _get_l1b_dataset(all_input_data: dict[str, xr.Dataset]) -> xr.Dataset:
+    """Return the RAD-4CH (L1B radiometer) dataset from the loaded inputs.
+
+    Matches on the ``ProductID`` global attribute. Falls back to the first dataset
+    if no RAD-4CH file is found (supports simplified test manifests).
+    """
     for ds in all_input_data.values():
         if ds.attrs.get("ProductID") == "RAD-4CH":
             return ds
@@ -111,6 +149,11 @@ def _get_l1b_dataset(all_input_data: dict[str, xr.Dataset]) -> xr.Dataset:
 
 
 def _get_cam_dataset(all_input_data: dict[str, xr.Dataset]) -> xr.Dataset:
+    """Return the SCENE-ID-CAM ancillary dataset from the loaded inputs.
+
+    Matches on the ``ProductID`` global attribute. Raises KeyError if not found —
+    a SCENE-ID-CAM file is required for scene/cloud classification.
+    """
     for ds in all_input_data.values():
         if ds.attrs.get("ProductID") == "SCENE-ID-CAM":
             return ds
@@ -118,6 +161,15 @@ def _get_cam_dataset(all_input_data: dict[str, xr.Dataset]) -> xr.Dataset:
 
 
 def _find_coefficient_file() -> Path:
+    """Locate the coefficient .nc file to use for unfiltering.
+
+    Resolution order:
+    1. ``COEFFICIENTS_FILE`` environment variable (absolute path).
+    2. Latest file matching ``unfiltering_coefficients_*.nc`` in the default
+       ``coefficients/`` directory (alphabetically last = highest semver).
+
+    Raises FileNotFoundError if no coefficient file is found.
+    """
     env_path = os.getenv("COEFFICIENTS_FILE")
     if env_path:
         return Path(env_path)
@@ -211,6 +263,24 @@ def create_and_write_data_product(
         processed_data: dict,
         output_path: str | Path | S3Path
 ) -> AnyPath:
+    """Write the processed science data to a Libera-formatted output NetCDF file.
+
+    Reads the product schema from ``l2-unfiltered-radiance-product-definition.yml``
+    (same directory as this file) and delegates to ``libera_utils.write_libera_data_product()``.
+
+    Parameters
+    ----------
+    processed_data : dict
+        Keys must match variable names defined in the product definition YAML
+        (e.g. ``shortwave_unfiltered_radiance``, ``radiometer_time``, etc.).
+    output_path : str | Path | S3Path
+        Directory where the output NetCDF will be written.
+
+    Returns
+    -------
+    AnyPath
+        Full path of the written NetCDF file.
+    """
     logger.info("Steps 4-5: Creating and writing data product")
 
     script_dir = Path(__file__).parent
