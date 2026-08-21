@@ -9,7 +9,7 @@
 
 attributes:
   ProductID: UNF-RAD-CAM
-  algorithm_version: 0.1.0
+  algorithm_version: 0.2.0
   lw_regression_method: "Univariate regression"
   sw_regression_method: "Univariate regression"
   ssw_regression_method: "Multivariate quadratic regression"
@@ -37,6 +37,14 @@ variables:
     missing_value: -9999.0
     dtype: float32
 
+  shortwave_unfiltered_radiance_uncertainty:
+    long_name: "Uncertainty of the Shortwave Unfiltered radiance measurements"
+    dimensions: ["RADIOMETER_TIME"]
+    units: "percent"
+    valid_range: [0, 100]
+    missing_value: -9999.0
+    dtype: float32
+
   longwave_unfiltered_radiance:
     long_name: "Longwave Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
@@ -45,11 +53,27 @@ variables:
     missing_value: -9999.0
     dtype: float32
 
+  longwave_unfiltered_radiance_uncertainty:
+    long_name: "Uncertainty of the Longwave Unfiltered radiance measurements"
+    dimensions: ["RADIOMETER_TIME"]
+    units: "percent"
+    valid_range: [0, 100]
+    missing_value: -9999.0
+    dtype: float32
+
   split_shortwave_unfiltered_radiance:
-    long_name: "SplitShortwave Unfiltered radiance measurements"
+    long_name: "Split Shortwave Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
     valid_range: [0, 1000]  
+    missing_value: -9999.0
+    dtype: float32
+
+  split_shortwave_unfiltered_radiance_uncertainty:
+    long_name: "Uncertainty of the Split Shortwave Unfiltered radiance measurements"
+    dimensions: ["RADIOMETER_TIME"]
+    units: "percent"
+    valid_range: [0, 100]
     missing_value: -9999.0
     dtype: float32
 
@@ -58,6 +82,14 @@ variables:
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
     valid_range: [0, 1000]  
+    missing_value: -9999.0
+    dtype: float32
+
+  total_unfiltered_radiance_uncertainty:
+    long_name: "Uncertainty of the Total Unfiltered radiance measurements"
+    dimensions: ["RADIOMETER_TIME"]
+    units: "percent"
+    valid_range: [0, 100]
     missing_value: -9999.0
     dtype: float32
 
