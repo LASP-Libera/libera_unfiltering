@@ -24,6 +24,8 @@ from libera_utils import smart_open
 from libera_utils.io.netcdf import write_libera_data_product
 from libera_utils.logutil import configure_task_logging
 
+from unfiltered_radiances.version import version as libera_unfiltering_version
+
 logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -295,6 +297,9 @@ def create_and_write_data_product(
 
     if not product_config_file.exists():
         raise FileNotFoundError(f"Product definition file not found: {product_config_file}")
+    
+    product_attributes = {"algorithm_version": libera_unfiltering_version()}
+
 
     logger.info(f"Saving to {output_path}")
     output_file_path = write_libera_data_product(
@@ -302,7 +307,8 @@ def create_and_write_data_product(
         data=processed_data,
         output_path=output_path,
         time_variable="radiometer_time",
-        strict=True
+        strict=True,
+        dynamic_product_attributes=product_attributes,
     )
     logger.info(f"Data product written to: {output_file_path}")
     return output_file_path
