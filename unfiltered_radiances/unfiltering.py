@@ -164,10 +164,10 @@ def apply_unfiltering(
     sza_idx, vza_idx, raz_idx = _assign_bin_indices(sza, vza, raz)
 
     n = len(sw_f)
-    sw_u  = np.full(n, np.nan, dtype=float32)
-    ssw_u = np.full(n, np.nan, dtype=float32)
-    lw_u  = np.full(n, np.nan, dtype=float32)
-    tot_u = np.full(n, np.nan, dtype=float32)
+    sw_u  = np.full(n, np.nan, dtype=np.float32)
+    ssw_u = np.full(n, np.nan, dtype=np.float32)
+    lw_u  = np.full(n, np.nan, dtype=np.float32)
+    tot_u = np.full(n, np.nan, dtype=np.float32)
 
     poly = PolynomialFeatures(degree=2, include_bias=True)  # quadratic per Loeb et al. (2001)
 
