@@ -9,7 +9,7 @@
 
 attributes:
   ProductID: UNF-RAD-CAM
-  algorithm_version: 0.2.0
+  algorithm_version: null
   lw_regression_method: "Univariate regression"
   sw_regression_method: "Univariate regression"
   ssw_regression_method: "Multivariate quadratic regression"
