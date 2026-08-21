@@ -191,6 +191,7 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
         classify_scene_from_scene_id_cam,
         apply_unfiltering,
         load_coefficients,
+        calculate_uncertainty,
     )
     from prod.std.standard_method import SCENE_TYPES
 
@@ -241,15 +242,21 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
     finally:
         coef_ds.close()
 
+    sw_uncert, ssw_uncert, lw_uncert, tot_uncert = calculate_uncertainty(sw_u, ssw_u, lw_u, tot_u)
+
     filled = int(np.isfinite(sw_u).sum())
     logger.info(f"Unfiltering complete: {filled}/{len(sw_u)} samples filled, {np.isnan(sw_u).sum()} NaN")
 
     return {
         "radiometer_time":                     times,
         "shortwave_unfiltered_radiance":       sw_u,
+        "shortwave_unfiltered_radiance_uncertainty": sw_uncert, 
         "split_shortwave_unfiltered_radiance": ssw_u,
+        "split_shortwave_unfiltered_radiance_uncertainty": ssw_uncert, 
         "longwave_unfiltered_radiance":        lw_u,
+        "longwave_unfiltered_radiance_uncertainty": lw_uncert, 
         "total_unfiltered_radiance":           tot_u,
+        "total_unfiltered_radiance_uncertainty": tot_uncert, 
         "solar_zenith_angle":                  sza,
         "viewing_zenith_angle":                vza,
         "relative_azimuth_angle":              raz,

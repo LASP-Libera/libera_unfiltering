@@ -202,3 +202,35 @@ def apply_unfiltering(
         tot_u[mask] = tot_coef[0] + tot_coef[1] * tot_f[mask] + tot_coef[2] * tot_f[mask]**2
 
     return sw_u, ssw_u, lw_u, tot_u
+
+def calculate_uncertainty(
+    sw_u: np.ndarray,
+    ssw_u: np.ndarray,
+    lw_u: np.ndarray,
+    tot_u: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Calculate per-channel uncertainties of the unfiltered radiances
+
+    Parameters
+    ----------
+    sw_u: np.ndarray[float]
+        Shortwave unfiltered radiance array. Not currently used for calulations.
+    ssw_u: np.ndarray[float]
+        Split shortwave unfiltered radiance array. Not currently used for calulations. 
+    lw_u: np.ndarray[float]
+        Longwave unfiltered radiance array. Not currently used for calulations.
+    tot_u: np.ndarray[float]
+        Total unfiltered radiance array. Not currently used for calulations.
+
+    Returns
+    -------
+    (sw_uncert, ssw_uncert, lw_uncert, tot_uncert):
+        Per-measurement uncertainties of the unfiltered radiances for each channel. Currently a constant value.
+    """
+    sw_uncert = np.full_like(sw_u, 0.05)
+    ssw_uncert = np.full_like(ssw_u, 0.05) 
+    lw_uncert = np.full_like(lw_u, 0.05)
+    tot_uncert = np.full_like(tot_u, 0.05)
+
+    return sw_uncert, ssw_uncert, lw_uncert, tot_uncert
