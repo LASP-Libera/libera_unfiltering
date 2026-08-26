@@ -38,7 +38,7 @@ variables:
     dtype: float32
 
   shortwave_unfiltered_radiance_error:
-    long_name: "Error of the Shortwave Unfiltered radiance measurements"
+    long_name: "Error of the Shortwave channel (0.3-5 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
@@ -53,7 +53,7 @@ variables:
     dtype: float32
 
   longwave_unfiltered_radiance_error:
-    long_name: "Error of the Longwave Unfiltered radiance measurements"
+    long_name: "Error of the Longwave channel (5-50 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
@@ -68,7 +68,7 @@ variables:
     dtype: float32
 
   split_shortwave_unfiltered_radiance_error:
-    long_name: "Error of the Split Shortwave Unfiltered radiance measurements"
+    long_name: "Error of the Split Shortwave channel (0.7-5 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
@@ -83,7 +83,7 @@ variables:
     dtype: float32
 
   total_unfiltered_radiance_error:
-    long_name: "Error of the Total Unfiltered radiance measurements"
+    long_name: "Error of the Total channel (0.3-100 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
