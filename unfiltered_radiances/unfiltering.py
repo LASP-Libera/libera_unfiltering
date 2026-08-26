@@ -228,9 +228,9 @@ def calculate_error(
     (sw_err, ssw_err, lw_err, tot_err):
         Per-measurement error of the unfiltered radiances for each channel.
     """
-    sw_err = 0.5 * sw_u
-    ssw_err = 0.5 * ssw_u
-    lw_err = 0.5 * lw_u
-    tot_err = 0.5 * tot_u
+    sw_err = 0.05 * sw_u
+    ssw_err = 0.05 * ssw_u
+    lw_err = 0.05 * lw_u
+    tot_err = 0.05 * tot_u
 
     return sw_err, ssw_err, lw_err, tot_err
