@@ -30,7 +30,7 @@ coordinates:
 
 variables:
   shortwave_unfiltered_radiance:
-    long_name: "Shortwave Unfiltered radiance measurements"
+    long_name: "Shortwave channel (0.3-5 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
     valid_range: [0, 1000]  
@@ -45,7 +45,7 @@ variables:
     dtype: float32
 
   longwave_unfiltered_radiance:
-    long_name: "Longwave Unfiltered radiance measurements"
+    long_name: "Longwave channel (5-50 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
     valid_range: [0, 1000]  
@@ -60,7 +60,7 @@ variables:
     dtype: float32
 
   split_shortwave_unfiltered_radiance:
-    long_name: "Split Shortwave Unfiltered radiance measurements"
+    long_name: "Split Shortwave channel (0.7-5 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
     valid_range: [0, 1000]  
@@ -75,7 +75,7 @@ variables:
     dtype: float32
 
   total_unfiltered_radiance:
-    long_name: "Total Unfiltered radiance measurements"
+    long_name: "Total channel (0.3-100 um) Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
     units: "W/(m^2*sr*nm)"  # Watts per square meter per steradian per nanometer
     valid_range: [0, 1000]  
