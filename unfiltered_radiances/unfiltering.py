@@ -203,14 +203,14 @@ def apply_unfiltering(
 
     return sw_u, ssw_u, lw_u, tot_u
 
-def calculate_uncertainty(
+def calculate_error(
     sw_u: np.ndarray,
     ssw_u: np.ndarray,
     lw_u: np.ndarray,
     tot_u: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Calculate per-channel uncertainties of the unfiltered radiances
+    Calculate per-channel error of the unfiltered radiances
 
     Parameters
     ----------
@@ -225,12 +225,12 @@ def calculate_uncertainty(
 
     Returns
     -------
-    (sw_uncert, ssw_uncert, lw_uncert, tot_uncert):
-        Per-measurement uncertainties of the unfiltered radiances for each channel. Currently a constant value.
+    (sw_err, ssw_err, lw_err, tot_err):
+        Per-measurement error of the unfiltered radiances for each channel.
     """
-    sw_uncert = np.full_like(sw_u, 0.05)
-    ssw_uncert = np.full_like(ssw_u, 0.05) 
-    lw_uncert = np.full_like(lw_u, 0.05)
-    tot_uncert = np.full_like(tot_u, 0.05)
+    sw_err = 0.5 * sw_u
+    ssw_err = 0.5 * ssw_u
+    lw_err = 0.5 * lw_u
+    tot_err = 0.5 * tot_u
 
-    return sw_uncert, ssw_uncert, lw_uncert, tot_uncert
+    return sw_err, ssw_err, lw_err, tot_err

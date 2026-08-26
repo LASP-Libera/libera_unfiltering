@@ -37,11 +37,10 @@ variables:
     missing_value: -9999.0
     dtype: float32
 
-  shortwave_unfiltered_radiance_uncertainty:
-    long_name: "Uncertainty of the Shortwave Unfiltered radiance measurements"
+  shortwave_unfiltered_radiance_error:
+    long_name: "Error of the Shortwave Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
-    units: "percent"
-    valid_range: [0, 100]
+    units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
     dtype: float32
 
@@ -53,11 +52,10 @@ variables:
     missing_value: -9999.0
     dtype: float32
 
-  longwave_unfiltered_radiance_uncertainty:
-    long_name: "Uncertainty of the Longwave Unfiltered radiance measurements"
+  longwave_unfiltered_radiance_error:
+    long_name: "Error of the Longwave Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
-    units: "percent"
-    valid_range: [0, 100]
+    units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
     dtype: float32
 
@@ -69,11 +67,10 @@ variables:
     missing_value: -9999.0
     dtype: float32
 
-  split_shortwave_unfiltered_radiance_uncertainty:
-    long_name: "Uncertainty of the Split Shortwave Unfiltered radiance measurements"
+  split_shortwave_unfiltered_radiance_error:
+    long_name: "Error of the Split Shortwave Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
-    units: "percent"
-    valid_range: [0, 100]
+    units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
     dtype: float32
 
@@ -85,11 +82,10 @@ variables:
     missing_value: -9999.0
     dtype: float32
 
-  total_unfiltered_radiance_uncertainty:
-    long_name: "Uncertainty of the Total Unfiltered radiance measurements"
+  total_unfiltered_radiance_error:
+    long_name: "Error of the Total Unfiltered radiance measurements"
     dimensions: ["RADIOMETER_TIME"]
-    units: "percent"
-    valid_range: [0, 100]
+    units: "W/(m^2*sr*nm)"
     missing_value: -9999.0
     dtype: float32
 
