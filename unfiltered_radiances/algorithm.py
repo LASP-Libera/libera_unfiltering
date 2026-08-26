@@ -24,6 +24,8 @@ from libera_utils import smart_open
 from libera_utils.io.netcdf import write_libera_data_product
 from libera_utils.logutil import configure_task_logging
 
+from unfiltered_radiances.version import version as libera_unfiltering_version
+
 logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -191,6 +193,7 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
         classify_scene_from_scene_id_cam,
         apply_unfiltering,
         load_coefficients,
+        calculate_error,
     )
     from prod.std.standard_method import SCENE_TYPES
 
@@ -241,15 +244,21 @@ def calculate_science_data(all_input_data: dict[str, xr.Dataset]) -> dict:
     finally:
         coef_ds.close()
 
+    sw_err, ssw_err, lw_err, tot_err = calculate_error(sw_u, ssw_u, lw_u, tot_u)
+
     filled = int(np.isfinite(sw_u).sum())
     logger.info(f"Unfiltering complete: {filled}/{len(sw_u)} samples filled, {np.isnan(sw_u).sum()} NaN")
 
     return {
         "radiometer_time":                     times,
         "shortwave_unfiltered_radiance":       sw_u,
+        "shortwave_unfiltered_radiance_error": sw_err, 
         "split_shortwave_unfiltered_radiance": ssw_u,
+        "split_shortwave_unfiltered_radiance_error": ssw_err, 
         "longwave_unfiltered_radiance":        lw_u,
+        "longwave_unfiltered_radiance_error": lw_err, 
         "total_unfiltered_radiance":           tot_u,
+        "total_unfiltered_radiance_error": tot_err, 
         "solar_zenith_angle":                  sza,
         "viewing_zenith_angle":                vza,
         "relative_azimuth_angle":              raz,
@@ -288,6 +297,9 @@ def create_and_write_data_product(
 
     if not product_config_file.exists():
         raise FileNotFoundError(f"Product definition file not found: {product_config_file}")
+    
+    product_attributes = {"algorithm_version": libera_unfiltering_version()}
+
 
     logger.info(f"Saving to {output_path}")
     output_file_path = write_libera_data_product(
@@ -295,7 +307,8 @@ def create_and_write_data_product(
         data=processed_data,
         output_path=output_path,
         time_variable="radiometer_time",
-        strict=True
+        strict=True,
+        dynamic_product_attributes=product_attributes,
     )
     logger.info(f"Data product written to: {output_file_path}")
     return output_file_path
