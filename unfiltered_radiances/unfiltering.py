@@ -164,10 +164,10 @@ def apply_unfiltering(
     sza_idx, vza_idx, raz_idx = _assign_bin_indices(sza, vza, raz)
 
     n = len(sw_f)
-    sw_u  = np.full(n, np.nan, dtype=float)
-    ssw_u = np.full(n, np.nan, dtype=float)
-    lw_u  = np.full(n, np.nan, dtype=float)
-    tot_u = np.full(n, np.nan, dtype=float)
+    sw_u  = np.full(n, np.nan, dtype=np.float32)
+    ssw_u = np.full(n, np.nan, dtype=np.float32)
+    lw_u  = np.full(n, np.nan, dtype=np.float32)
+    tot_u = np.full(n, np.nan, dtype=np.float32)
 
     poly = PolynomialFeatures(degree=2, include_bias=True)  # quadratic per Loeb et al. (2001)
 
@@ -202,3 +202,36 @@ def apply_unfiltering(
         tot_u[mask] = tot_coef[0] + tot_coef[1] * tot_f[mask] + tot_coef[2] * tot_f[mask]**2
 
     return sw_u, ssw_u, lw_u, tot_u
+
+def calculate_error(
+    sw_u: np.ndarray,
+    ssw_u: np.ndarray,
+    lw_u: np.ndarray,
+    tot_u: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Calculate per-channel error of the unfiltered radiances
+
+    Parameters
+    ----------
+    sw_u: np.ndarray[float]
+        Shortwave unfiltered radiance array.
+    ssw_u: np.ndarray[float]
+        Split shortwave unfiltered radiance array.
+    lw_u: np.ndarray[float]
+        Longwave unfiltered radiance array.
+    tot_u: np.ndarray[float]
+        Total unfiltered radiance array.
+
+    Returns
+    -------
+    (sw_err, ssw_err, lw_err, tot_err):
+        Per-measurement error of the unfiltered radiances for each channel.
+    """
+    # TODO[libera_unfitering-3]: Revisit uniform 5% uncertainty and consider propagated uncertainty from filtered radiances
+    sw_err = 0.05 * sw_u
+    ssw_err = 0.05 * ssw_u
+    lw_err = 0.05 * lw_u
+    tot_err = 0.05 * tot_u
+
+    return sw_err, ssw_err, lw_err, tot_err
