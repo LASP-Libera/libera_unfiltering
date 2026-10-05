@@ -26,8 +26,7 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade pip
 RUN curl -sSL https://install.python-poetry.org | python -
 ENV PATH="$PATH:/root/.local/bin"
-RUN poetry lock && poetry sync --only main --no-root
-
+RUN poetry lock && poetry sync --only main
 # Make local packages importable without editable install
 ENV PYTHONPATH=/app
 
